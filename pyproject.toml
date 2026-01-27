@@ -1,0 +1,82 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vinculum"
+version = "0.1.0"
+description = "Vinculum - Bind and correlate security findings across tools"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    { name = "Security Team" }
+]
+keywords = ["security", "vulnerability", "deduplication", "correlation", "burp", "nessus", "semgrep"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
+
+dependencies = [
+    "click>=8.0",
+    "pydantic>=2.0",
+    "rich>=13.0",
+    "httpx>=0.25",
+    "defusedxml>=0.7",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+ai = [
+    "anthropic>=0.40",
+    "openai>=1.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "pytest-asyncio",
+    "ruff",
+]
+all = ["vinculum[ai,dev]"]
+
+[project.scripts]
+vinculum = "vinculum.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/security-team/vinculum"
+Documentation = "https://github.com/security-team/vinculum#readme"
+Issues = "https://github.com/security-team/vinculum/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["vinculum"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["vinculum"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues burpVersion="2023.1" exportTime="2024-01-15T10:30:00">
+  <issue>
+    <serialNumber>1234567890</serialNumber>
+    <type>1049088</type>
+    <name>Cross-site scripting (reflected)</name>
+    <host ip="192.168.1.100">https://example.com</host>
+    <path>/search</path>
+    <location>/search [q parameter]</location>
+    <severity>High</severity>
+    <confidence>Certain</confidence>
+    <issueBackground>Reflected cross-site scripting vulnerabilities arise when data is copied from a request and echoed into the application's immediate response in an unsafe way.</issueBackground>
+    <remediationBackground>Input should be validated as strictly as possible. Output encoding should be applied.</remediationBackground>
+    <issueDetail>The application reflects the value of the q parameter in the response.</issueDetail>
+    <vulnerabilityClassifications>CWE-79: Improper Neutralization of Input During Web Page Generation</vulnerabilityClassifications>
+    <requestresponse>
+      <request base64="false">GET /search?q=&lt;script&gt;alert(1)&lt;/script&gt; HTTP/1.1
+Host: example.com
+
+</request>
+      <response base64="false">HTTP/1.1 200 OK
+Content-Type: text/html
+
+&lt;html&gt;&lt;body&gt;Search results for: &lt;script&gt;alert(1)&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;</response>
+    </requestresponse>
+  </issue>
+  <issue>
+    <serialNumber>1234567891</serialNumber>
+    <type>5243392</type>
+    <name>SQL injection</name>
+    <host ip="192.168.1.100">https://example.com</host>
+    <path>/users</path>
+    <location>/users [id parameter]</location>
+    <severity>High</severity>
+    <confidence>Firm</confidence>
+    <issueBackground>SQL injection vulnerabilities arise when user-controllable data is incorporated into database SQL queries in an unsafe manner.</issueBackground>
+    <remediationBackground>Use parameterized queries to prevent SQL injection.</remediationBackground>
+    <issueDetail>The id parameter appears to be vulnerable to SQL injection.</issueDetail>
+    <vulnerabilityClassifications>CWE-89: SQL Injection</vulnerabilityClassifications>
+  </issue>
+  <issue>
+    <serialNumber>1234567892</serialNumber>
+    <type>16777472</type>
+    <name>TLS certificate</name>
+    <host>https://example.com</host>
+    <path>/</path>
+    <location>/</location>
+    <severity>Information</severity>
+    <confidence>Certain</confidence>
+    <issueBackground>The server presented a TLS certificate.</issueBackground>
+  </issue>
+</issues>

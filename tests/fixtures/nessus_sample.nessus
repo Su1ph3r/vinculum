@@ -1,0 +1,51 @@
+<?xml version="1.0" ?>
+<NessusClientData_v2>
+  <Policy>
+    <policyName>Test Policy</policyName>
+  </Policy>
+  <Report name="Test Scan">
+    <ReportHost name="192.168.1.100">
+      <HostProperties>
+        <tag name="operating-system">Linux 5.4</tag>
+        <tag name="host-ip">192.168.1.100</tag>
+      </HostProperties>
+      <ReportItem port="443" svc_name="https" protocol="tcp" severity="3" pluginID="51192" pluginName="SSL Certificate Cannot Be Trusted" pluginFamily="General">
+        <description>The server's X.509 certificate cannot be trusted.</description>
+        <solution>Purchase or generate a proper SSL certificate for this service.</solution>
+        <synopsis>The SSL certificate for this service cannot be trusted.</synopsis>
+        <plugin_output>Certificate chain:
+CN=example.com
+Issuer: CN=Self-Signed CA</plugin_output>
+        <cvss_base_score>6.4</cvss_base_score>
+        <cvss_vector>CVSS2#AV:N/AC:L/Au:N/C:P/I:P/A:N</cvss_vector>
+        <cvss3_base_score>7.4</cvss3_base_score>
+        <cvss3_vector>CVSS:3.0/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N</cvss3_vector>
+      </ReportItem>
+      <ReportItem port="22" svc_name="ssh" protocol="tcp" severity="2" pluginID="10881" pluginName="SSH Protocol Version 1 Session Key Retrieval" pluginFamily="General">
+        <description>The remote SSH daemon supports connections made using the version 1.33 or 1.5 of the SSH protocol.</description>
+        <solution>Disable SSH protocol version 1.</solution>
+        <synopsis>The remote SSH daemon supports the SSH1 protocol.</synopsis>
+        <cve>CVE-2001-0361</cve>
+        <cwe>310</cwe>
+        <cvss_base_score>4.0</cvss_base_score>
+        <see_also>https://www.cve.org/CVERecord?id=CVE-2001-0361</see_also>
+        <exploit_available>true</exploit_available>
+        <exploitability_ease>Exploits are available</exploitability_ease>
+      </ReportItem>
+      <ReportItem port="80" svc_name="http" protocol="tcp" severity="4" pluginID="97994" pluginName="Apache Struts CVE-2017-5638 Remote Code Execution" pluginFamily="Web Servers">
+        <description>The remote web server is running Apache Struts with a vulnerable parser.</description>
+        <solution>Upgrade to Apache Struts 2.3.32 or 2.5.10.1 or later.</solution>
+        <synopsis>The remote web server contains a Java framework that is affected by a remote code execution vulnerability.</synopsis>
+        <cve>CVE-2017-5638</cve>
+        <cwe>20</cwe>
+        <cvss_base_score>10.0</cvss_base_score>
+        <cvss3_base_score>10.0</cvss3_base_score>
+        <exploit_available>true</exploit_available>
+      </ReportItem>
+      <ReportItem port="0" svc_name="general" protocol="tcp" severity="0" pluginID="19506" pluginName="Nessus Scan Information" pluginFamily="Settings">
+        <description>Information about this scan.</description>
+        <plugin_output>Scan Start: Mon Jan 15 10:00:00 2024</plugin_output>
+      </ReportItem>
+    </ReportHost>
+  </Report>
+</NessusClientData_v2>

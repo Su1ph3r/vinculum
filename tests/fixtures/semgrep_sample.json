@@ -1,0 +1,69 @@
+{
+  "version": "1.50.0",
+  "results": [
+    {
+      "check_id": "python.lang.security.audit.dangerous-subprocess-use",
+      "path": "app/utils/shell.py",
+      "start": {"line": 45, "col": 5},
+      "end": {"line": 45, "col": 50},
+      "extra": {
+        "message": "Detected subprocess call with shell=True. This is dangerous because it can lead to command injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": ["CWE-78"],
+          "owasp": ["A03:2021 - Injection"],
+          "confidence": "HIGH",
+          "category": "security",
+          "technology": ["python"],
+          "references": [
+            "https://docs.python.org/3/library/subprocess.html",
+            "https://owasp.org/www-community/attacks/Command_Injection"
+          ]
+        },
+        "lines": "    subprocess.call(cmd, shell=True)"
+      }
+    },
+    {
+      "check_id": "python.lang.security.audit.hardcoded-password",
+      "path": "app/config.py",
+      "start": {"line": 12, "col": 1},
+      "end": {"line": 12, "col": 35},
+      "extra": {
+        "message": "Detected hardcoded password in source code.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": ["CWE-798"],
+          "confidence": "MEDIUM",
+          "category": "security",
+          "subcategory": ["vuln"],
+          "technology": ["python"]
+        },
+        "lines": "DB_PASSWORD = 'supersecret123'"
+      }
+    },
+    {
+      "check_id": "python.django.security.audit.xss.template-var-unescaped",
+      "path": "templates/user_profile.html",
+      "start": {"line": 23, "col": 10},
+      "end": {"line": 23, "col": 45},
+      "extra": {
+        "message": "Detected unescaped template variable. This could lead to XSS.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": ["CWE-79"],
+          "owasp": ["A03:2021 - Injection"],
+          "confidence": "HIGH",
+          "category": "security",
+          "technology": ["django", "python"],
+          "references": ["https://docs.djangoproject.com/en/4.0/topics/security/#cross-site-scripting-xss-protection"]
+        },
+        "lines": "{{ user.bio|safe }}",
+        "fix": "{{ user.bio }}"
+      }
+    }
+  ],
+  "errors": [],
+  "paths": {
+    "scanned": ["app/", "templates/"]
+  }
+}

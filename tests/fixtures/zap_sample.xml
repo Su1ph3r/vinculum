@@ -1,0 +1,86 @@
+<?xml version="1.0"?>
+<OWASPZAPReport version="2.14.0" generated="Mon, 15 Jan 2024 10:30:00">
+  <site name="https://testapp.example.com" host="testapp.example.com" port="443" ssl="true">
+    <alerts>
+      <alertitem>
+        <pluginid>10020</pluginid>
+        <alertRef>10020</alertRef>
+        <alert>X-Frame-Options Header Not Set</alert>
+        <name>X-Frame-Options Header Not Set</name>
+        <riskcode>2</riskcode>
+        <confidence>2</confidence>
+        <riskdesc>Medium (Medium)</riskdesc>
+        <desc>&lt;p&gt;X-Frame-Options header is not included in the HTTP response to protect against 'ClickJacking' attacks.&lt;/p&gt;</desc>
+        <instances>
+          <instance>
+            <uri>https://testapp.example.com/dashboard</uri>
+            <method>GET</method>
+            <param></param>
+            <attack></attack>
+            <evidence></evidence>
+          </instance>
+          <instance>
+            <uri>https://testapp.example.com/settings</uri>
+            <method>GET</method>
+            <param></param>
+            <attack></attack>
+            <evidence></evidence>
+          </instance>
+        </instances>
+        <cweid>1021</cweid>
+        <wascid>15</wascid>
+        <solution>&lt;p&gt;Most modern Web browsers support the X-Frame-Options HTTP header. Ensure it's set on all pages.&lt;/p&gt;</solution>
+        <reference>&lt;p&gt;https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options&lt;/p&gt;</reference>
+        <otherinfo></otherinfo>
+      </alertitem>
+      <alertitem>
+        <pluginid>40012</pluginid>
+        <alertRef>40012</alertRef>
+        <alert>Cross Site Scripting (Reflected)</alert>
+        <name>Cross Site Scripting (Reflected)</name>
+        <riskcode>3</riskcode>
+        <confidence>3</confidence>
+        <riskdesc>High (High)</riskdesc>
+        <desc>&lt;p&gt;Cross-site Scripting (XSS) is an attack technique that involves echoing attacker-supplied code into a user's browser instance.&lt;/p&gt;</desc>
+        <instances>
+          <instance>
+            <uri>https://testapp.example.com/search</uri>
+            <method>GET</method>
+            <param>q</param>
+            <attack>&lt;script&gt;alert(1)&lt;/script&gt;</attack>
+            <evidence>&lt;script&gt;alert(1)&lt;/script&gt;</evidence>
+          </instance>
+        </instances>
+        <cweid>79</cweid>
+        <wascid>8</wascid>
+        <solution>&lt;p&gt;Phase: Architecture and Design. Use a vetted library or framework that does not allow this weakness.&lt;/p&gt;</solution>
+        <reference>&lt;p&gt;https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html&lt;/p&gt;</reference>
+        <otherinfo>&lt;p&gt;The payload was reflected without any encoding.&lt;/p&gt;</otherinfo>
+      </alertitem>
+      <alertitem>
+        <pluginid>10036</pluginid>
+        <alertRef>10036</alertRef>
+        <alert>Server Leaks Version Information via "Server" HTTP Response Header Field</alert>
+        <name>Server Leaks Version Information</name>
+        <riskcode>1</riskcode>
+        <confidence>3</confidence>
+        <riskdesc>Low (High)</riskdesc>
+        <desc>&lt;p&gt;The web server is leaking version information via the "Server" HTTP response header.&lt;/p&gt;</desc>
+        <instances>
+          <instance>
+            <uri>https://testapp.example.com/</uri>
+            <method>GET</method>
+            <param></param>
+            <attack></attack>
+            <evidence>nginx/1.18.0</evidence>
+          </instance>
+        </instances>
+        <cweid>200</cweid>
+        <wascid>13</wascid>
+        <solution>&lt;p&gt;Configure the web server to prevent leaking server version information.&lt;/p&gt;</solution>
+        <reference>&lt;p&gt;https://owasp.org/www-project-web-security-testing-guide/&lt;/p&gt;</reference>
+        <otherinfo></otherinfo>
+      </alertitem>
+    </alerts>
+  </site>
+</OWASPZAPReport>
