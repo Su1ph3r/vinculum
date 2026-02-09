@@ -6,7 +6,7 @@
 
 ## Features
 
-- **Multi-Tool Ingestion**: Parse findings from Burp Suite, Nessus, Semgrep, Nuclei, Trivy, OWASP ZAP, and Reticustos
+- **Multi-Tool Ingestion**: Parse findings from 12 security tools including Burp Suite, Nessus, Semgrep, Nuclei, Trivy, OWASP ZAP, Reticustos, Nubicustos, Indago, Mobilicustos, Cepheus, and BypassBurrito
 - **Intelligent Correlation**: Deduplicate findings across tools using fingerprint-based and semantic matching
 - **SARIF Output**: Export results in SARIF 2.1.0 format for CI/CD integration
 - **Ariadne Export**: Export correlated findings for attack path synthesis in Ariadne knowledge graphs
@@ -106,6 +106,11 @@ vinculum ingest scan_results/* --config vinculum.yaml
 | Trivy | JSON | `.json` | Container/Dependency |
 | OWASP ZAP | XML | `.xml` | DAST |
 | Reticustos | JSON | `.json` | Network/DAST/SSL |
+| Nubicustos | JSON | `.json` | Cloud (AWS/Azure/GCP/K8s) |
+| Indago | JSON | `.json` | API/DAST |
+| Mobilicustos | JSON | `.json` | Mobile |
+| Cepheus | JSON | `.json` | Container Escape |
+| BypassBurrito | JSON | `.json` | WAF Bypass |
 
 ## CLI Reference
 
@@ -302,7 +307,12 @@ vinculum/
 │   ├── nuclei.py       # Nuclei JSONL parser
 │   ├── trivy.py        # Trivy JSON parser
 │   ├── zap.py          # OWASP ZAP XML parser
-│   └── reticustos.py   # Reticustos JSON parser
+│   ├── reticustos.py   # Reticustos JSON parser
+│   ├── nubicustos.py   # Nubicustos cloud parser
+│   ├── indago.py       # Indago API fuzzer parser
+│   ├── mobilicustos.py # Mobilicustos mobile parser
+│   ├── cepheus.py      # Cepheus container escape parser
+│   └── bypassburrito.py # BypassBurrito WAF bypass parser
 ├── correlation/
 │   ├── engine.py       # Correlation engine
 │   ├── fingerprint.py  # Fingerprint generation
@@ -316,43 +326,45 @@ vinculum/
     └── epss.py         # EPSS score enrichment
 ```
 
-## Pipeline Integration
+## Cross-Tool Integration
 
-Vinculum serves as the correlation layer in the Reticustos → Vinculum → Ariadne security pipeline:
+Vinculum is the central correlation engine in a cross-tool security pipeline connecting 7 specialized tools:
 
 ```
-Reticustos (scan orchestration)
-  │  Nmap, Nuclei, testssl, Nikto, Masscan, Shodan
-  │
-  ▼  JSON export
-Vinculum (correlation engine)
-  │  Deduplicate, fingerprint, EPSS enrich, correlate
-  │
-  ▼  vinculum-ariadne-export format
-Ariadne (attack path synthesis)
-     Build knowledge graph, synthesize attack paths, generate playbooks
+Nubicustos (cloud) ──containers──> Cepheus (container escape)
+Reticustos (network) ──endpoints──> Indago (API fuzzing)
+Indago (API fuzzing) ──WAF-blocked──> BypassBurrito (WAF bypass)
+Ariadne (attack paths) ──endpoints──> Indago (API fuzzing)
+All tools ──findings──> Vinculum (correlation) ──export──> Ariadne (attack paths)
 ```
 
-### Reticustos → Vinculum
+### Importing Findings
+
+Vinculum ingests findings from all 12 supported tools. Each parser auto-detects its format:
 
 ```bash
-# Export from Reticustos API
+# Ingest from any combination of tools
+vinculum ingest reticustos_export.json nubicustos_findings.json \
+  indago_results.json cepheus_report.json \
+  --format ariadne --output correlated.json
+
+# Ingest Reticustos scan exports
 curl -o scan_export.json "http://localhost:8000/api/exports/findings/json?scan_id=SCAN_ID"
-
-# Ingest into Vinculum
-vinculum ingest scan_export.json --format ariadne --output correlated.json
+vinculum ingest scan_export.json --enrich-epss --format ariadne --output correlated.json
 ```
 
-The Reticustos parser handles findings from all integrated scanners (Nmap, Nuclei, testssl.sh, Nikto, Masscan, Shodan), including SSL/TLS analysis results. MITRE ATT&CK mappings and false positive filtering are preserved through the pipeline.
+### Exporting to Ariadne
 
-### Vinculum → Ariadne
+The Ariadne v1.1 export includes extended entity types for richer knowledge graphs:
 
 ```bash
-# Feed into Ariadne for attack path analysis
-ariadne analyze correlated.json --output report --format html --playbook
+vinculum ingest scan_results/* --format ariadne --output findings.json
+ariadne analyze findings.json --output report --format html --playbook
 ```
 
-The Ariadne export preserves Vinculum correlation metadata (fingerprints, source tools, EPSS scores, correlation IDs) in the knowledge graph for enriched attack path scoring.
+The export preserves cloud resources, containers, mobile apps, API endpoints, and Vinculum correlation metadata (fingerprints, source tools, EPSS scores, correlation IDs) for enriched attack path scoring.
+
+See also: [Nubicustos](https://github.com/Su1ph3r/Nubicustos) | [Reticustos](https://github.com/Su1ph3r/Reticustos) | [Indago](https://github.com/Su1ph3r/indago) | [BypassBurrito](https://github.com/Su1ph3r/bypassburrito) | [Cepheus](https://github.com/Su1ph3r/Cepheus) | [Ariadne](https://github.com/Su1ph3r/ariadne)
 
 ## Contributing
 
