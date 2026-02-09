@@ -11,9 +11,15 @@ from vinculum.output.ariadne_output import AriadneOutputFormatter
 from vinculum.output.json_output import JSONOutputFormatter
 from vinculum.parsers.base import ParserRegistry
 from vinculum.parsers.burp import BurpParser
+from vinculum.parsers.bypassburrito import BypassBurritoParser
+from vinculum.parsers.cepheus import CepheusParser
+from vinculum.parsers.indago import IndagoParser
+from vinculum.parsers.mobilicustos import MobilicustosParser
 from vinculum.parsers.nessus import NessusParser
+from vinculum.parsers.nubicustos import NubicustosParser
 from vinculum.parsers.reticustos import ReticustosParser
 from vinculum.parsers.semgrep import SemgrepParser
+from vinculum.parsers.trivy import TrivyParser
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -23,9 +29,15 @@ def setup_parsers():
     """Register parsers before each test."""
     ParserRegistry.clear()
     ParserRegistry.register(BurpParser())
+    ParserRegistry.register(BypassBurritoParser())
+    ParserRegistry.register(CepheusParser())
+    ParserRegistry.register(IndagoParser())
+    ParserRegistry.register(MobilicustosParser())
     ParserRegistry.register(NessusParser())
-    ParserRegistry.register(SemgrepParser())
+    ParserRegistry.register(NubicustosParser())
     ParserRegistry.register(ReticustosParser())
+    ParserRegistry.register(SemgrepParser())
+    ParserRegistry.register(TrivyParser())
 
 
 class TestFullPipeline:
@@ -211,7 +223,7 @@ class TestReticustosAriadneRoundTrip:
 
         # Top-level schema
         assert data["format"] == "vinculum-ariadne-export"
-        assert data["format_version"] == "1.0"
+        assert data["format_version"] == "1.1"
         assert "metadata" in data
         assert "generated_at" in data["metadata"]
 
@@ -266,3 +278,202 @@ class TestReticustosAriadneRoundTrip:
         data = json.loads(output_path.read_text())
         assert data["format"] == "vinculum-ariadne-export"
         assert len(data["vulnerabilities"]) + len(data["misconfigurations"]) > 0
+
+
+class TestNubicustosAriadneRoundTrip:
+    """Integration test: Nubicustos → Vinculum → Ariadne export with cloud_resources."""
+
+    def test_nubicustos_to_ariadne_pipeline(self):
+        parser = NubicustosParser()
+        findings = parser.parse(FIXTURES_DIR / "nubicustos_sample.json")
+        assert len(findings) > 0
+
+        result = correlate_findings(findings)
+        formatter = AriadneOutputFormatter(pretty=True)
+        data = json.loads(formatter.format(result))
+
+        assert data["format"] == "vinculum-ariadne-export"
+        assert data["format_version"] == "1.1"
+
+        # Verify cloud_resources are extracted
+        assert len(data["cloud_resources"]) > 0
+        resource_ids = [cr["resource_id"] for cr in data["cloud_resources"]]
+        assert "arn:aws:s3:::acme-prod-assets" in resource_ids
+
+        # Verify cloud provider metadata
+        s3_resource = next(cr for cr in data["cloud_resources"] if "s3" in cr["resource_id"])
+        assert s3_resource["cloud_provider"] == "aws"
+        assert s3_resource["resource_type"] == "s3_bucket"
+
+        # Verify has_cloud_vulnerability relationship
+        rel_types = {r["relation_type"] for r in data["relationships"]}
+        assert "has_cloud_vulnerability" in rel_types
+
+
+class TestIndagoAriadneRoundTrip:
+    """Integration test: Indago → Vinculum → Ariadne export with api_endpoints."""
+
+    def test_indago_to_ariadne_pipeline(self):
+        parser = IndagoParser()
+        findings = parser.parse(FIXTURES_DIR / "indago_sample.json")
+        assert len(findings) > 0
+
+        result = correlate_findings(findings)
+        formatter = AriadneOutputFormatter(pretty=True)
+        data = json.loads(formatter.format(result))
+
+        assert data["format_version"] == "1.1"
+
+        # Verify api_endpoints are extracted
+        assert len(data["api_endpoints"]) > 0
+        urls = [ep["url"] for ep in data["api_endpoints"]]
+        assert any("users/search" in url for url in urls)
+
+        # Verify endpoint has method and parameters
+        search_ep = next(ep for ep in data["api_endpoints"] if "search" in ep["url"])
+        assert search_ep["method"] == "GET"
+        assert "query" in search_ep["parameters"]
+
+        # Verify has_api_vulnerability relationship
+        rel_types = {r["relation_type"] for r in data["relationships"]}
+        assert "has_api_vulnerability" in rel_types
+
+
+class TestMobilicustosAriadneRoundTrip:
+    """Integration test: Mobilicustos → Vinculum → Ariadne export with mobile_apps."""
+
+    def test_mobilicustos_to_ariadne_pipeline(self):
+        parser = MobilicustosParser()
+        findings = parser.parse(FIXTURES_DIR / "mobilicustos_sample.json")
+        assert len(findings) > 0
+
+        result = correlate_findings(findings)
+        formatter = AriadneOutputFormatter(pretty=True)
+        data = json.loads(formatter.format(result))
+
+        assert data["format_version"] == "1.1"
+
+        # Verify mobile_apps are extracted
+        assert len(data["mobile_apps"]) > 0
+        app = data["mobile_apps"][0]
+        assert app["app_id"] == "com.acme.pay"
+        assert app["platform"] == "android"
+        assert app["package_name"] == "com.acme.pay"
+
+
+class TestCepheusAriadneRoundTrip:
+    """Integration test: Cepheus → Vinculum → Ariadne export with containers."""
+
+    def test_cepheus_to_ariadne_pipeline(self):
+        parser = CepheusParser()
+        findings = parser.parse(FIXTURES_DIR / "cepheus_sample.json")
+        assert len(findings) > 0
+
+        result = correlate_findings(findings)
+        formatter = AriadneOutputFormatter(pretty=True)
+        data = json.loads(formatter.format(result))
+
+        assert data["format_version"] == "1.1"
+
+        # Verify containers are extracted
+        assert len(data["containers"]) > 0
+        container_ids = [c["container_id"] for c in data["containers"]]
+        assert "abc123def456" in container_ids
+
+        # Verify container metadata
+        container = next(c for c in data["containers"] if c["container_id"] == "abc123def456")
+        assert container["hostname"] == "webapp-pod-1"
+        assert container["runtime"] == "containerd"
+        assert container["namespace"] == "production"
+        assert container["image"] == "acme/webapp:3.2.1"
+
+        # Verify has_container_escape relationship
+        rel_types = {r["relation_type"] for r in data["relationships"]}
+        assert "has_container_escape" in rel_types
+
+
+class TestBypassBurritoAriadneRoundTrip:
+    """Integration test: BypassBurrito → Vinculum → Ariadne export."""
+
+    def test_bypassburrito_to_ariadne_pipeline(self):
+        parser = BypassBurritoParser()
+        findings = parser.parse(FIXTURES_DIR / "bypassburrito_sample.json")
+        assert len(findings) > 0
+
+        result = correlate_findings(findings)
+        formatter = AriadneOutputFormatter(pretty=True)
+        data = json.loads(formatter.format(result))
+
+        assert data["format_version"] == "1.1"
+
+        # Verify findings are exported
+        total = len(data["vulnerabilities"]) + len(data["misconfigurations"])
+        assert total > 0
+
+        # Successful bypasses should be HIGH severity vulnerabilities
+        vuln_titles = [v["title"] for v in data["vulnerabilities"]]
+        assert any("WAF Bypass" in t for t in vuln_titles)
+
+
+class TestCrossToolCorrelation:
+    """Integration test: Cross-tool correlation between different parser outputs."""
+
+    def test_indago_bypassburrito_correlation(self):
+        """Ingest Indago + BypassBurrito findings and verify they correlate."""
+        indago_findings = IndagoParser().parse(FIXTURES_DIR / "indago_sample.json")
+        bb_findings = BypassBurritoParser().parse(FIXTURES_DIR / "bypassburrito_sample.json")
+
+        all_findings = indago_findings + bb_findings
+        result = correlate_findings(all_findings)
+
+        # Should have findings from both tools
+        tools = result.by_tool()
+        assert "indago" in tools
+        assert "bypassburrito" in tools
+
+        # Total count should include all findings
+        assert result.original_count == len(all_findings)
+
+    def test_cepheus_trivy_cve_matching(self):
+        """Ingest Cepheus + Trivy findings and verify CVE-based correlation."""
+        cepheus_findings = CepheusParser().parse(FIXTURES_DIR / "cepheus_sample.json")
+        trivy_findings = TrivyParser().parse(FIXTURES_DIR / "trivy_sample.json")
+
+        all_findings = cepheus_findings + trivy_findings
+        result = correlate_findings(all_findings)
+
+        # Should have findings from both tools
+        tools = result.by_tool()
+        assert "cepheus" in tools
+        assert "trivy" in tools
+
+        # Should have some deduplication from CVE matching
+        assert result.unique_count <= result.original_count
+
+    def test_all_parsers_combined(self):
+        """Ingest findings from all parsers and verify pipeline works end-to-end."""
+        all_findings = []
+        all_findings.extend(NubicustosParser().parse(FIXTURES_DIR / "nubicustos_sample.json"))
+        all_findings.extend(IndagoParser().parse(FIXTURES_DIR / "indago_sample.json"))
+        all_findings.extend(MobilicustosParser().parse(FIXTURES_DIR / "mobilicustos_sample.json"))
+        all_findings.extend(CepheusParser().parse(FIXTURES_DIR / "cepheus_sample.json"))
+        all_findings.extend(BypassBurritoParser().parse(FIXTURES_DIR / "bypassburrito_sample.json"))
+        all_findings.extend(ReticustosParser().parse(FIXTURES_DIR / "reticustos_sample.json"))
+
+        assert len(all_findings) > 0
+
+        result = correlate_findings(all_findings)
+        formatter = AriadneOutputFormatter(pretty=True)
+        data = json.loads(formatter.format(result))
+
+        # All v1.1 entity types should be populated
+        assert len(data["cloud_resources"]) > 0
+        assert len(data["containers"]) > 0
+        assert len(data["mobile_apps"]) > 0
+        assert len(data["api_endpoints"]) > 0
+
+        # Multiple relationship types should be present
+        rel_types = {r["relation_type"] for r in data["relationships"]}
+        assert "has_cloud_vulnerability" in rel_types
+        assert "has_container_escape" in rel_types
+        assert "has_api_vulnerability" in rel_types

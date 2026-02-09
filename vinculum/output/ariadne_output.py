@@ -44,6 +44,12 @@ class AriadneOutputFormatter:
         misconfigurations: list[dict[str, Any]] = []
         relationships: list[dict[str, Any]] = []
 
+        # New v1.1 entity collections
+        cloud_resources: dict[str, dict[str, Any]] = {}
+        containers: dict[str, dict[str, Any]] = {}
+        mobile_apps: dict[str, dict[str, Any]] = {}
+        api_endpoints: dict[str, dict[str, Any]] = {}
+
         # Track service keys for relationship building
         service_keys_for_host: dict[str, list[str]] = {}
 
@@ -57,6 +63,7 @@ class AriadneOutputFormatter:
             for finding in group.findings:
                 loc = finding.location
                 host_ip = loc.host
+                finding_type = FindingType(finding.finding_type) if isinstance(finding.finding_type, str) else finding.finding_type
 
                 if host_ip and host_ip not in hosts:
                     hosts[host_ip] = {
@@ -77,6 +84,22 @@ class AriadneOutputFormatter:
                             "host_ip": host_ip,
                         }
                         service_keys_for_host.setdefault(host_ip, []).append(svc_key)
+
+                # Extract cloud resources from CLOUD findings
+                if finding_type == FindingType.CLOUD:
+                    self._extract_cloud_resource(finding, cloud_resources)
+
+                # Extract containers from Cepheus findings
+                if finding.source_tool == "cepheus" and finding_type == FindingType.CONTAINER:
+                    self._extract_container(finding, containers)
+
+                # Extract mobile apps from Mobilicustos findings
+                if finding.source_tool == "mobilicustos":
+                    self._extract_mobile_app(finding, mobile_apps)
+
+                # Extract API endpoints from Indago findings
+                if finding.source_tool == "indago" and finding_type == FindingType.DAST:
+                    self._extract_api_endpoint(finding, api_endpoints)
 
             # Classify finding as vulnerability or misconfiguration
             is_vulnerability = self._is_vulnerability(primary)
@@ -100,7 +123,7 @@ class AriadneOutputFormatter:
                     "relation_type": "runs_on",
                 })
 
-        # Finding → Host/Service relationships
+        # Finding → Host/Service relationships + new entity relationships
         for group in result.groups:
             if not group.primary_finding:
                 continue
@@ -110,8 +133,10 @@ class AriadneOutputFormatter:
             host_ip = loc.host
             is_vuln = self._is_vulnerability(primary)
             finding_type_label = "vulnerability" if is_vuln else "misconfiguration"
-            relation_type = "has_vulnerability" if is_vuln else "has_misconfiguration"
             finding_key = self._finding_key(primary, group)
+
+            # Determine relation type based on finding type
+            relation_type = self._relation_type_for_finding(primary, is_vuln)
 
             if host_ip and loc.port:
                 svc_key = f"{host_ip}:{loc.port}/{loc.protocol or 'tcp'}"
@@ -133,7 +158,7 @@ class AriadneOutputFormatter:
 
         return {
             "format": "vinculum-ariadne-export",
-            "format_version": "1.0",
+            "format_version": "1.1",
             "metadata": {
                 "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 "vinculum_version": __version__,
@@ -142,7 +167,115 @@ class AriadneOutputFormatter:
             "services": list(services.values()),
             "vulnerabilities": vulnerabilities,
             "misconfigurations": misconfigurations,
+            "cloud_resources": list(cloud_resources.values()),
+            "containers": list(containers.values()),
+            "mobile_apps": list(mobile_apps.values()),
+            "api_endpoints": list(api_endpoints.values()),
             "relationships": relationships,
+        }
+
+    def _relation_type_for_finding(self, finding: UnifiedFinding, is_vuln: bool) -> str:
+        """Determine the relationship type based on finding type."""
+        finding_type = FindingType(finding.finding_type) if isinstance(finding.finding_type, str) else finding.finding_type
+
+        if finding_type == FindingType.CLOUD:
+            return "has_cloud_vulnerability"
+        if finding_type == FindingType.CONTAINER and finding.source_tool == "cepheus":
+            return "has_container_escape"
+        if finding.source_tool == "mobilicustos":
+            return "has_mobile_vulnerability"
+        if finding.source_tool == "indago":
+            return "has_api_vulnerability"
+        if is_vuln:
+            return "has_vulnerability"
+        return "has_misconfiguration"
+
+    def _extract_cloud_resource(
+        self, finding: UnifiedFinding, cloud_resources: dict[str, dict[str, Any]]
+    ) -> None:
+        """Extract cloud resource entity from a CLOUD finding."""
+        raw = finding.raw_data
+        resource_id = raw.get("resource_id") or finding.location.host
+        if not resource_id or resource_id in cloud_resources:
+            return
+
+        cloud_resources[resource_id] = {
+            "resource_id": resource_id,
+            "resource_type": raw.get("resource_type"),
+            "resource_name": raw.get("resource_name"),
+            "cloud_provider": raw.get("cloud_provider"),
+            "region": raw.get("region"),
+        }
+
+    def _extract_container(
+        self, finding: UnifiedFinding, containers: dict[str, dict[str, Any]]
+    ) -> None:
+        """Extract container entity from a Cepheus finding."""
+        raw = finding.raw_data
+        chain = raw.get("chain", {})
+        container = chain.get("container", {})
+        container_id = container.get("container_id")
+        if not container_id or container_id in containers:
+            return
+
+        containers[container_id] = {
+            "container_id": container_id,
+            "hostname": container.get("hostname"),
+            "runtime": container.get("runtime"),
+            "namespace": container.get("namespace"),
+            "image": container.get("image"),
+        }
+
+    def _extract_mobile_app(
+        self, finding: UnifiedFinding, mobile_apps: dict[str, dict[str, Any]]
+    ) -> None:
+        """Extract mobile app entity from a Mobilicustos finding."""
+        raw = finding.raw_data
+        app_id = raw.get("app_id")
+        if not app_id or app_id in mobile_apps:
+            return
+
+        # Extract app metadata from tags and raw_data
+        platform = None
+        package_name = None
+        app_name = None
+        for tag in finding.tags:
+            if tag.startswith("platform:"):
+                platform = tag.split(":", 1)[1]
+            elif tag.startswith("package:"):
+                package_name = tag.split(":", 1)[1]
+            elif tag.startswith("app_name:"):
+                app_name = tag.split(":", 1)[1]
+
+        # Fall back to _app_info in raw_data
+        app_info = raw.get("_app_info", {})
+        if not app_name:
+            app_name = app_info.get("app_name")
+
+        mobile_apps[app_id] = {
+            "app_id": app_id,
+            "platform": platform,
+            "package_name": package_name,
+            "app_name": app_name,
+        }
+
+    def _extract_api_endpoint(
+        self, finding: UnifiedFinding, api_endpoints: dict[str, dict[str, Any]]
+    ) -> None:
+        """Extract API endpoint entity from an Indago finding."""
+        loc = finding.location
+        url = loc.url
+        if not url:
+            return
+
+        endpoint_key = f"{loc.method or 'GET'}:{url}"
+        if endpoint_key in api_endpoints:
+            return
+
+        api_endpoints[endpoint_key] = {
+            "url": url,
+            "method": loc.method,
+            "parameters": [loc.parameter] if loc.parameter else [],
         }
 
     def _is_vulnerability(self, finding: UnifiedFinding) -> bool:

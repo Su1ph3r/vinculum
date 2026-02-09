@@ -1,0 +1,117 @@
+{
+  "scan_id": "cepheus-scan-789",
+  "scan_date": "2025-01-21T16:00:00Z",
+  "scanner_version": "0.9.0",
+  "target": {
+    "hostname": "k8s-worker-01",
+    "runtime": "containerd",
+    "namespace": "production",
+    "image": "acme/webapp:3.2.1"
+  },
+  "chains": [
+    {
+      "chain_id": "chain-001",
+      "description": "Privileged container with host PID namespace allows full host escape via nsenter.",
+      "severity": "critical",
+      "composite_score": 9.8,
+      "container": {
+        "container_id": "abc123def456",
+        "hostname": "webapp-pod-1",
+        "runtime": "containerd",
+        "namespace": "production",
+        "image": "acme/webapp:3.2.1"
+      },
+      "steps": [
+        {
+          "technique": "privileged_container",
+          "description": "Container runs with --privileged flag, granting full host capabilities.",
+          "severity": "critical",
+          "reliability": "high",
+          "cves": ["CVE-2022-0185"],
+          "mitre_attack": ["T1611"]
+        },
+        {
+          "technique": "host_pid_namespace",
+          "description": "Container shares the host PID namespace, allowing process inspection and nsenter.",
+          "severity": "high",
+          "reliability": "high",
+          "cves": [],
+          "mitre_attack": ["T1611", "T1055"]
+        },
+        {
+          "technique": "nsenter_escape",
+          "description": "Using nsenter to enter host namespaces and gain full host access.",
+          "severity": "critical",
+          "reliability": "high",
+          "cves": [],
+          "mitre_attack": ["T1611"]
+        }
+      ]
+    },
+    {
+      "chain_id": "chain-002",
+      "description": "Writable hostPath mount combined with cron exploitation for host code execution.",
+      "severity": "high",
+      "composite_score": 8.2,
+      "container": {
+        "container_id": "def789ghi012",
+        "hostname": "worker-pod-2",
+        "runtime": "containerd",
+        "namespace": "production",
+        "image": "acme/worker:1.0.0"
+      },
+      "steps": [
+        {
+          "technique": "writable_hostpath",
+          "description": "Container has a writable hostPath volume mounted at /host-data pointing to /var/spool.",
+          "severity": "high",
+          "reliability": "high",
+          "cves": [],
+          "mitre_attack": ["T1006"]
+        },
+        {
+          "technique": "cron_exploitation",
+          "description": "Writing to host cron directories to schedule arbitrary command execution.",
+          "severity": "high",
+          "reliability": "medium",
+          "cves": ["CVE-2021-25741"],
+          "mitre_attack": ["T1053.003"]
+        }
+      ]
+    }
+  ],
+  "posture": {
+    "runtime": "containerd",
+    "kubernetes_version": "1.27.4",
+    "pod_security_standard": "baseline",
+    "seccomp_enabled": false,
+    "apparmor_enabled": true,
+    "selinux_enabled": false,
+    "network_policies": true,
+    "privileged_containers": 2,
+    "hostpath_mounts": 3,
+    "host_namespaces": 1
+  },
+  "remediations": [
+    {
+      "technique": "privileged_container",
+      "description": "Remove --privileged flag and use specific capabilities instead (e.g., CAP_NET_ADMIN)."
+    },
+    {
+      "technique": "host_pid_namespace",
+      "description": "Disable hostPID in pod spec. Use shared process namespace only when necessary."
+    },
+    {
+      "technique": "nsenter_escape",
+      "description": "Prevent nsenter by removing privileged mode and host namespace access."
+    },
+    {
+      "technique": "writable_hostpath",
+      "description": "Use readOnly hostPath mounts or switch to persistent volumes with restricted access."
+    },
+    {
+      "technique": "cron_exploitation",
+      "description": "Restrict hostPath mounts to non-sensitive directories. Enable Seccomp and AppArmor profiles."
+    }
+  ]
+}

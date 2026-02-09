@@ -20,11 +20,16 @@ from vinculum.output.json_output import JSONOutputFormatter
 from vinculum.output.sarif_output import SARIFOutputFormatter
 from vinculum.parsers.base import ParseError, ParserRegistry
 from vinculum.parsers.burp import BurpParser
+from vinculum.parsers.bypassburrito import BypassBurritoParser
+from vinculum.parsers.cepheus import CepheusParser
+from vinculum.parsers.indago import IndagoParser
+from vinculum.parsers.mobilicustos import MobilicustosParser
 from vinculum.parsers.nessus import NessusParser
+from vinculum.parsers.nubicustos import NubicustosParser
 from vinculum.parsers.nuclei import NucleiParser
+from vinculum.parsers.reticustos import ReticustosParser
 from vinculum.parsers.semgrep import SemgrepParser
 from vinculum.parsers.trivy import TrivyParser
-from vinculum.parsers.reticustos import ReticustosParser
 from vinculum.parsers.zap import ZAPParser
 from vinculum.suppression import SuppressionManager
 
@@ -32,12 +37,17 @@ console = Console()
 
 # Register parsers
 ParserRegistry.register(BurpParser())
+ParserRegistry.register(BypassBurritoParser())
+ParserRegistry.register(CepheusParser())
+ParserRegistry.register(IndagoParser())
+ParserRegistry.register(MobilicustosParser())
 ParserRegistry.register(NessusParser())
-ParserRegistry.register(SemgrepParser())
+ParserRegistry.register(NubicustosParser())
 ParserRegistry.register(NucleiParser())
+ParserRegistry.register(ReticustosParser())
+ParserRegistry.register(SemgrepParser())
 ParserRegistry.register(TrivyParser())
 ParserRegistry.register(ZAPParser())
-ParserRegistry.register(ReticustosParser())
 
 
 @click.group()

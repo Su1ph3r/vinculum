@@ -1,0 +1,84 @@
+{
+  "scan_id": "indago-scan-456",
+  "target": "https://api.example.com:8443",
+  "scan_date": "2025-01-18T09:00:00Z",
+  "scanner_version": "1.5.0",
+  "findings": [
+    {
+      "id": "ind-001",
+      "title": "SQL Injection in User Search",
+      "description": "SQL injection vulnerability found in the user search endpoint. The 'query' parameter is concatenated into a SQL statement without sanitization.",
+      "severity": "critical",
+      "confidence": "certain",
+      "endpoint": "https://api.example.com:8443/api/v1/users/search",
+      "method": "GET",
+      "parameter": "query",
+      "cwe": "CWE-89",
+      "cvss": 9.8,
+      "evidence": {
+        "request": "GET /api/v1/users/search?query=admin'%20OR%201=1-- HTTP/1.1\nHost: api.example.com:8443",
+        "response": "HTTP/1.1 200 OK\n\n[{\"id\":1,\"name\":\"admin\"},{\"id\":2,\"name\":\"user1\"}]",
+        "payload": "admin' OR 1=1--"
+      },
+      "curl_command": "curl 'https://api.example.com:8443/api/v1/users/search?query=admin%27%20OR%201%3D1--'",
+      "remediation": "Use parameterized queries or prepared statements instead of string concatenation.",
+      "references": ["https://owasp.org/www-community/attacks/SQL_Injection"],
+      "tags": ["injection", "owasp-api1"]
+    },
+    {
+      "id": "ind-002",
+      "title": "Broken Authentication - JWT None Algorithm",
+      "description": "The API accepts JWT tokens with 'none' algorithm, allowing token forgery.",
+      "severity": "high",
+      "confidence": "certain",
+      "endpoint": "https://api.example.com:8443/api/v1/admin/dashboard",
+      "method": "GET",
+      "parameter": "Authorization",
+      "cwe": "CWE-287",
+      "cvss": 8.6,
+      "evidence": {
+        "request": "GET /api/v1/admin/dashboard HTTP/1.1\nHost: api.example.com:8443\nAuthorization: Bearer eyJhbGciOiJub25lIn0.eyJyb2xlIjoiYWRtaW4ifQ.",
+        "response": "HTTP/1.1 200 OK\n\n{\"dashboard\": \"admin_panel\"}",
+        "payload": "eyJhbGciOiJub25lIn0.eyJyb2xlIjoiYWRtaW4ifQ."
+      },
+      "curl_command": "curl -H 'Authorization: Bearer eyJhbGciOiJub25lIn0.eyJyb2xlIjoiYWRtaW4ifQ.' https://api.example.com:8443/api/v1/admin/dashboard",
+      "remediation": "Reject JWT tokens with 'none' algorithm. Enforce RS256 or HS256 with strong secrets.",
+      "references": ["https://owasp.org/API-Security/editions/2023/en/0xa2-broken-authentication/"],
+      "tags": ["authentication", "jwt", "owasp-api2"]
+    },
+    {
+      "id": "ind-003",
+      "title": "BOLA - Insecure Direct Object Reference",
+      "description": "API endpoint allows accessing other users' data by changing the user ID parameter.",
+      "severity": "high",
+      "confidence": "firm",
+      "endpoint": "https://api.example.com:8443/api/v1/users/42/profile",
+      "method": "GET",
+      "cwe": "CWE-639",
+      "cvss": 7.5,
+      "evidence": {
+        "request": "GET /api/v1/users/42/profile HTTP/1.1\nHost: api.example.com:8443\nAuthorization: Bearer <user1_token>",
+        "response": "HTTP/1.1 200 OK\n\n{\"id\":42,\"name\":\"other_user\",\"email\":\"other@example.com\"}"
+      },
+      "curl_command": "curl -H 'Authorization: Bearer <user1_token>' https://api.example.com:8443/api/v1/users/42/profile",
+      "remediation": "Implement proper authorization checks to ensure users can only access their own data.",
+      "tags": ["authorization", "owasp-api1"]
+    },
+    {
+      "id": "ind-004",
+      "title": "Excessive Data Exposure in Error Response",
+      "description": "API returns stack traces and internal details in error responses.",
+      "severity": "low",
+      "confidence": "certain",
+      "endpoint": "https://api.example.com:8443/api/v1/orders/invalid",
+      "method": "GET",
+      "cwe": "CWE-209",
+      "evidence": {
+        "request": "GET /api/v1/orders/invalid HTTP/1.1\nHost: api.example.com:8443",
+        "response": "HTTP/1.1 500 Internal Server Error\n\n{\"error\":\"NumberFormatException\",\"stack\":\"at com.example.OrderService.getOrder(OrderService.java:42)\"}"
+      },
+      "remediation": "Return generic error messages in production. Log detailed errors server-side only.",
+      "tags": ["information-disclosure", "owasp-api3"]
+    }
+  ]
+}

@@ -7,11 +7,16 @@ import pytest
 from vinculum.models.enums import Confidence, FindingType, Severity
 from vinculum.parsers.base import ParseError, ParserRegistry
 from vinculum.parsers.burp import BurpParser
+from vinculum.parsers.bypassburrito import BypassBurritoParser
+from vinculum.parsers.cepheus import CepheusParser
+from vinculum.parsers.indago import IndagoParser
+from vinculum.parsers.mobilicustos import MobilicustosParser
 from vinculum.parsers.nessus import NessusParser
+from vinculum.parsers.nubicustos import NubicustosParser
 from vinculum.parsers.nuclei import NucleiParser
+from vinculum.parsers.reticustos import ReticustosParser
 from vinculum.parsers.semgrep import SemgrepParser
 from vinculum.parsers.trivy import TrivyParser
-from vinculum.parsers.reticustos import ReticustosParser
 from vinculum.parsers.zap import ZAPParser
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -578,6 +583,446 @@ class TestZAPParser:
         parser = ZAPParser()
         bad_file = tmp_path / "bad.xml"
         bad_file.write_text("this is not xml")
+
+        with pytest.raises(ParseError):
+            parser.parse(bad_file)
+
+
+class TestNubicustosParser:
+    """Tests for Nubicustos cloud security scanner parser."""
+
+    @pytest.fixture
+    def parser(self):
+        return NubicustosParser()
+
+    @pytest.fixture
+    def sample_file(self):
+        return FIXTURES_DIR / "nubicustos_sample.json"
+
+    def test_tool_name(self, parser):
+        assert parser.tool_name == "nubicustos"
+
+    def test_supported_extensions(self, parser):
+        assert ".json" in parser.supported_extensions
+
+    def test_supports_file(self, parser, sample_file):
+        assert parser.supports_file(sample_file)
+
+    def test_does_not_support_non_nubicustos_json(self, parser, tmp_path):
+        other = tmp_path / "other.json"
+        other.write_text('{"results": []}')
+        assert not parser.supports_file(other)
+
+    def test_parse_returns_findings(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        # 5 findings minus 1 false_positive = 4
+        assert len(findings) == 4
+
+    def test_parse_skips_false_positive(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        titles = [f.title for f in findings]
+        assert "CloudTrail Logging Disabled" not in titles
+
+    def test_parse_critical_finding(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        ssh = next(f for f in findings if "Unrestricted SSH" in f.title)
+
+        assert ssh.source_tool == "nubicustos:scout"
+        assert ssh.severity == Severity.CRITICAL
+        assert ssh.cvss_score == 9.1
+        assert ssh.finding_type == FindingType.CLOUD
+
+    def test_parse_cloud_tags(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        s3 = next(f for f in findings if "S3 Bucket" in f.title)
+
+        assert "cloud:aws" in s3.tags
+        assert "region:us-east-1" in s3.tags
+        assert "resource:s3_bucket" in s3.tags
+
+    def test_parse_compliance_tags(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        s3 = next(f for f in findings if "S3 Bucket" in f.title)
+
+        assert "compliance:CIS-AWS-1.4" in s3.tags
+        assert "compliance:SOC2" in s3.tags
+
+    def test_parse_cve(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        rds = next(f for f in findings if "RDS" in f.title)
+
+        assert "CVE-2023-22515" in rds.cve_ids
+
+    def test_parse_includes_evidence(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        s3 = next(f for f in findings if "S3 Bucket" in f.title)
+
+        assert s3.evidence is not None
+        assert "AllUsers" in s3.evidence
+
+    def test_parse_includes_remediation(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        s3 = next(f for f in findings if "S3 Bucket" in f.title)
+
+        assert s3.remediation is not None
+        assert "Block Public Access" in s3.remediation
+
+    def test_nubicustos_invalid_json(self, tmp_path):
+        parser = NubicustosParser()
+        bad_file = tmp_path / "bad.json"
+        bad_file.write_text("this is not json")
+
+        with pytest.raises(ParseError):
+            parser.parse(bad_file)
+
+
+class TestIndagoParser:
+    """Tests for Indago API security scanner parser."""
+
+    @pytest.fixture
+    def parser(self):
+        return IndagoParser()
+
+    @pytest.fixture
+    def sample_file(self):
+        return FIXTURES_DIR / "indago_sample.json"
+
+    def test_tool_name(self, parser):
+        assert parser.tool_name == "indago"
+
+    def test_supported_extensions(self, parser):
+        assert ".json" in parser.supported_extensions
+
+    def test_supports_file(self, parser, sample_file):
+        assert parser.supports_file(sample_file)
+
+    def test_does_not_support_non_indago_json(self, parser, tmp_path):
+        other = tmp_path / "other.json"
+        other.write_text('{"results": []}')
+        assert not parser.supports_file(other)
+
+    def test_parse_returns_findings(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        assert len(findings) == 4
+
+    def test_parse_critical_finding(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        sqli = next(f for f in findings if "SQL Injection" in f.title)
+
+        assert sqli.source_tool == "indago"
+        assert sqli.severity == Severity.CRITICAL
+        assert sqli.confidence == Confidence.CERTAIN
+        assert "CWE-89" in sqli.cwe_ids
+        assert sqli.cvss_score == 9.8
+        assert sqli.finding_type == FindingType.DAST
+
+    def test_parse_location(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        sqli = next(f for f in findings if "SQL Injection" in f.title)
+
+        assert sqli.location.url == "https://api.example.com:8443/api/v1/users/search"
+        assert sqli.location.method == "GET"
+        assert sqli.location.parameter == "query"
+        assert sqli.location.host == "api.example.com"
+        assert sqli.location.port == 8443
+
+    def test_parse_evidence(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        sqli = next(f for f in findings if "SQL Injection" in f.title)
+
+        assert sqli.evidence is not None
+        assert "REQUEST:" in sqli.evidence
+        assert "RESPONSE:" in sqli.evidence
+        assert "PAYLOAD:" in sqli.evidence
+
+    def test_parse_curl_in_raw_data(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        sqli = next(f for f in findings if "SQL Injection" in f.title)
+
+        assert "curl_command" in sqli.raw_data
+
+    def test_parse_includes_remediation(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        sqli = next(f for f in findings if "SQL Injection" in f.title)
+
+        assert sqli.remediation is not None
+        assert "parameterized" in sqli.remediation.lower()
+
+    def test_indago_invalid_json(self, tmp_path):
+        parser = IndagoParser()
+        bad_file = tmp_path / "bad.json"
+        bad_file.write_text("this is not json")
+
+        with pytest.raises(ParseError):
+            parser.parse(bad_file)
+
+
+class TestMobilicustosParser:
+    """Tests for Mobilicustos mobile security scanner parser."""
+
+    @pytest.fixture
+    def parser(self):
+        return MobilicustosParser()
+
+    @pytest.fixture
+    def sample_file(self):
+        return FIXTURES_DIR / "mobilicustos_sample.json"
+
+    def test_tool_name(self, parser):
+        assert parser.tool_name == "mobilicustos"
+
+    def test_supported_extensions(self, parser):
+        assert ".json" in parser.supported_extensions
+
+    def test_supports_file(self, parser, sample_file):
+        assert parser.supports_file(sample_file)
+
+    def test_does_not_support_non_mobilicustos_json(self, parser, tmp_path):
+        other = tmp_path / "other.json"
+        other.write_text('{"app": {}, "findings": [{"no_app_id": true}]}')
+        assert not parser.supports_file(other)
+
+    def test_parse_returns_findings(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        # 5 findings minus 1 false_positive = 4
+        assert len(findings) == 4
+
+    def test_parse_skips_false_positive(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        titles = [f.title for f in findings]
+        assert "Weak Encryption Algorithm Used" not in titles
+
+    def test_parse_sast_finding(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        api_key = next(f for f in findings if "API Key" in f.title)
+
+        assert api_key.source_tool == "mobilicustos"
+        assert api_key.severity == Severity.HIGH
+        assert api_key.finding_type == FindingType.SAST
+        assert "CWE-798" in api_key.cwe_ids
+
+    def test_parse_dast_finding(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        cert_pin = next(f for f in findings if "Certificate Pinning" in f.title)
+
+        # network_traffic category → DAST
+        assert cert_pin.finding_type == FindingType.DAST
+
+    def test_parse_location(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        api_key = next(f for f in findings if "API Key" in f.title)
+
+        assert api_key.location.file_path == "com/acme/pay/network/ApiClient.java"
+        assert api_key.location.line_start == 28
+
+    def test_parse_masvs_tags(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        api_key = next(f for f in findings if "API Key" in f.title)
+
+        assert "masvs:MASVS-CODE" in api_key.tags
+        assert "masvs-control:MSTG-CODE-1" in api_key.tags
+        assert "mastg:MASTG-TEST-0001" in api_key.tags
+
+    def test_parse_app_metadata_tags(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        api_key = next(f for f in findings if "API Key" in f.title)
+
+        assert "platform:android" in api_key.tags
+        assert "package:com.acme.pay" in api_key.tags
+
+    def test_parse_evidence(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        api_key = next(f for f in findings if "API Key" in f.title)
+
+        assert api_key.evidence is not None
+        assert "sk_live_abc123" in api_key.evidence
+
+    def test_mobilicustos_invalid_json(self, tmp_path):
+        parser = MobilicustosParser()
+        bad_file = tmp_path / "bad.json"
+        bad_file.write_text("this is not json")
+
+        with pytest.raises(ParseError):
+            parser.parse(bad_file)
+
+
+class TestCepheusParser:
+    """Tests for Cepheus container escape analysis parser."""
+
+    @pytest.fixture
+    def parser(self):
+        return CepheusParser()
+
+    @pytest.fixture
+    def sample_file(self):
+        return FIXTURES_DIR / "cepheus_sample.json"
+
+    def test_tool_name(self, parser):
+        assert parser.tool_name == "cepheus"
+
+    def test_supported_extensions(self, parser):
+        assert ".json" in parser.supported_extensions
+
+    def test_supports_file(self, parser, sample_file):
+        assert parser.supports_file(sample_file)
+
+    def test_does_not_support_non_cepheus_json(self, parser, tmp_path):
+        other = tmp_path / "other.json"
+        other.write_text('{"results": []}')
+        assert not parser.supports_file(other)
+
+    def test_parse_returns_findings(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        # 2 chain findings + 2 standalone CVE findings (CVE-2022-0185, CVE-2021-25741)
+        assert len(findings) == 4
+
+    def test_parse_chain_finding(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        chain = next(f for f in findings if "privileged_container" in f.title and "Container Escape:" in f.title)
+
+        assert chain.source_tool == "cepheus"
+        assert chain.severity == Severity.CRITICAL
+        assert chain.cvss_score == 9.8
+        assert chain.finding_type == FindingType.CONTAINER
+        assert "privileged_container" in chain.title
+        assert "nsenter_escape" in chain.title
+
+    def test_parse_chain_cves(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        chain = next(f for f in findings if "privileged_container" in f.title and "Container Escape:" in f.title)
+
+        assert "CVE-2022-0185" in chain.cve_ids
+
+    def test_parse_chain_mitre_tags(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        chain = next(f for f in findings if "privileged_container" in f.title and "Container Escape:" in f.title)
+
+        assert "mitre:T1611" in chain.tags
+
+    def test_parse_chain_remediation(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        chain = next(f for f in findings if "privileged_container" in f.title and "Container Escape:" in f.title)
+
+        assert chain.remediation is not None
+        assert "privileged" in chain.remediation.lower()
+
+    def test_parse_standalone_cve_finding(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        cve_finding = next(f for f in findings if "CVE-2022-0185" in f.title and "Container Vulnerability:" in f.title)
+
+        assert cve_finding.source_tool == "cepheus"
+        assert "CVE-2022-0185" in cve_finding.cve_ids
+        assert cve_finding.finding_type == FindingType.CONTAINER
+
+    def test_parse_confidence_mapping(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        # Chain 1 has all high reliability steps → CERTAIN confidence
+        chain1 = next(f for f in findings if "privileged_container" in f.title and "Container Escape:" in f.title)
+        assert chain1.confidence == Confidence.CERTAIN
+
+        # Chain 2 has a medium reliability step → FIRM confidence
+        chain2 = next(f for f in findings if "writable_hostpath" in f.title and "Container Escape:" in f.title)
+        assert chain2.confidence == Confidence.FIRM
+
+    def test_cepheus_invalid_json(self, tmp_path):
+        parser = CepheusParser()
+        bad_file = tmp_path / "bad.json"
+        bad_file.write_text("this is not json")
+
+        with pytest.raises(ParseError):
+            parser.parse(bad_file)
+
+
+class TestBypassBurritoParser:
+    """Tests for BypassBurrito WAF bypass testing parser."""
+
+    @pytest.fixture
+    def parser(self):
+        return BypassBurritoParser()
+
+    @pytest.fixture
+    def sample_file(self):
+        return FIXTURES_DIR / "bypassburrito_sample.json"
+
+    def test_tool_name(self, parser):
+        assert parser.tool_name == "bypassburrito"
+
+    def test_supported_extensions(self, parser):
+        assert ".json" in parser.supported_extensions
+
+    def test_supports_file(self, parser, sample_file):
+        assert parser.supports_file(sample_file)
+
+    def test_does_not_support_non_bypassburrito_json(self, parser, tmp_path):
+        other = tmp_path / "other.json"
+        other.write_text('{"results": []}')
+        assert not parser.supports_file(other)
+
+    def test_parse_returns_findings(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        assert len(findings) == 4
+
+    def test_parse_successful_bypass(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        xss = next(f for f in findings if "XSS" in f.title)
+
+        assert xss.source_tool == "bypassburrito"
+        assert xss.severity == Severity.HIGH
+        assert xss.finding_type == FindingType.DAST
+        assert "WAF Bypass:" in xss.title
+
+    def test_parse_no_bypass(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        no_bypass = next(f for f in findings if "No Bypass Found" in f.title)
+
+        assert no_bypass.severity == Severity.INFO
+
+    def test_parse_waf_tags(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        xss = next(f for f in findings if "XSS" in f.title)
+
+        assert "waf:cloud_waf" in xss.tags
+        assert "waf-vendor:CloudFlare" in xss.tags
+
+    def test_parse_mutation_tags(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        xss = next(f for f in findings if "XSS" in f.title)
+
+        assert "mutation:tag_substitution" in xss.tags
+        assert "mutation:event_handler_swap" in xss.tags
+
+    def test_parse_location(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        xss = next(f for f in findings if "XSS" in f.title)
+
+        assert xss.location.url == "https://app.example.com/search"
+        assert xss.location.method == "GET"
+        assert xss.location.parameter == "q"
+
+    def test_parse_evidence(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        xss = next(f for f in findings if "XSS" in f.title)
+
+        assert xss.evidence is not None
+        assert "Original Payload:" in xss.evidence
+        assert "Bypass Payload:" in xss.evidence
+
+    def test_parse_curl_in_raw_data(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        xss = next(f for f in findings if "XSS" in f.title)
+
+        assert "curl_command" in xss.raw_data
+
+    def test_supports_single_object(self, parser, tmp_path):
+        """Should support single object (non-array) format."""
+        single = tmp_path / "single.json"
+        single.write_text('{"original_payload": "test", "waf_detected": {"type": "waf"}, "successful_bypass": {"found": false}}')
+        assert parser.supports_file(single)
+
+    def test_bypassburrito_invalid_json(self, tmp_path):
+        parser = BypassBurritoParser()
+        bad_file = tmp_path / "bad.json"
+        bad_file.write_text("this is not json")
 
         with pytest.raises(ParseError):
             parser.parse(bad_file)
