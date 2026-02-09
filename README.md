@@ -289,6 +289,12 @@ vinculum/
     └── epss.py         # EPSS score enrichment
 ```
 
+## Roadmap
+
+- **Reticustos Integration**: Accept Reticustos scan results as an input source, enabling network security findings (Nmap, Nuclei, testssl.sh, Nikto, Masscan, Shodan) to be deduplicated and correlated alongside application security findings
+- **Ariadne Integration**: Export deduplicated, enriched findings to Ariadne for attack path synthesis — vinculum normalises and deduplicates, Ariadne builds the kill chain
+- **Bidirectional SARIF Pipeline**: Serve as a shared correlation layer between Reticustos (upstream scanner orchestration) and Ariadne (downstream attack path modelling)
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
