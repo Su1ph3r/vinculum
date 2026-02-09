@@ -6,13 +6,15 @@
 
 ## Features
 
-- **Multi-Tool Ingestion**: Parse findings from Burp Suite, Nessus, Semgrep, Nuclei, Trivy, and OWASP ZAP
+- **Multi-Tool Ingestion**: Parse findings from Burp Suite, Nessus, Semgrep, Nuclei, Trivy, OWASP ZAP, and Reticustos
 - **Intelligent Correlation**: Deduplicate findings across tools using fingerprint-based and semantic matching
 - **SARIF Output**: Export results in SARIF 2.1.0 format for CI/CD integration
+- **Ariadne Export**: Export correlated findings for attack path synthesis in Ariadne knowledge graphs
 - **EPSS Enrichment**: Enrich findings with Exploit Prediction Scoring System data
 - **AI-Powered Correlation**: Optional semantic correlation using OpenAI, Anthropic, Ollama, or LM Studio
 - **Suppression Rules**: Filter out false positives and accepted risks via configuration
 - **Configuration File Support**: YAML-based configuration with CLI override capability
+- **Pipeline Integration**: Connects [Reticustos](https://github.com/Su1ph3r/reticustos) scan orchestration to [Ariadne](https://github.com/Su1ph3r/ariadne) attack path synthesis
 
 ## Installation
 
@@ -41,6 +43,12 @@ vinculum ingest *.xml *.json --format json --output results.json
 
 # Output as SARIF for CI/CD
 vinculum ingest scan_results/* --format sarif --output results.sarif
+
+# Export for Ariadne attack path analysis
+vinculum ingest scan_results/* --format ariadne --output findings.json
+
+# Ingest Reticustos scan exports
+vinculum ingest reticustos_export.json --format ariadne --output findings.json
 
 # Filter by minimum severity
 vinculum ingest findings.xml --min-severity high
@@ -97,6 +105,7 @@ vinculum ingest scan_results/* --config vinculum.yaml
 | Nuclei | JSONL | `.json`, `.jsonl` | DAST |
 | Trivy | JSON | `.json` | Container/Dependency |
 | OWASP ZAP | XML | `.xml` | DAST |
+| Reticustos | JSON | `.json` | Network/DAST/SSL |
 
 ## CLI Reference
 
@@ -109,7 +118,7 @@ Usage: vinculum ingest [OPTIONS] FILES...
 
 Options:
   -c, --config PATH          Path to configuration file
-  -f, --format [json|console|sarif]
+  -f, --format [json|console|sarif|ariadne]
                              Output format (default: console)
   -o, --output PATH          Output file path
   --min-severity [critical|high|medium|low|info]
@@ -198,6 +207,18 @@ sarif_json = formatter.format(result)
 formatter.write(result, "results.sarif")
 ```
 
+### Ariadne Export
+
+```python
+from vinculum.output import AriadneOutputFormatter
+
+formatter = AriadneOutputFormatter(pretty=True)
+ariadne_json = formatter.format(result)
+
+# Or write directly to file
+formatter.write(result, "findings_for_ariadne.json")
+```
+
 ### Suppression Rules
 
 ```python
@@ -258,6 +279,10 @@ Standard format for static analysis tools, compatible with:
 - GitLab SAST
 - Many CI/CD platforms
 
+### Ariadne
+
+Structured JSON export (`vinculum-ariadne-export` format) designed for ingestion by [Ariadne](https://github.com/Su1ph3r/ariadne). Contains hosts, services, vulnerabilities, misconfigurations, and relationships with Vinculum correlation metadata (fingerprints, source tools, EPSS scores) preserved for graph enrichment.
+
 ## Architecture
 
 ```
@@ -276,24 +301,58 @@ vinculum/
 │   ├── semgrep.py      # Semgrep JSON parser
 │   ├── nuclei.py       # Nuclei JSONL parser
 │   ├── trivy.py        # Trivy JSON parser
-│   └── zap.py          # OWASP ZAP XML parser
+│   ├── zap.py          # OWASP ZAP XML parser
+│   └── reticustos.py   # Reticustos JSON parser
 ├── correlation/
 │   ├── engine.py       # Correlation engine
 │   ├── fingerprint.py  # Fingerprint generation
 │   └── ai_correlator.py # AI-powered correlation
 ├── output/
-│   ├── console_output.py # Console formatter
-│   ├── json_output.py    # JSON formatter
-│   └── sarif_output.py   # SARIF formatter
+│   ├── console_output.py  # Console formatter
+│   ├── json_output.py     # JSON formatter
+│   ├── sarif_output.py    # SARIF formatter
+│   └── ariadne_output.py  # Ariadne export formatter
 └── enrichment/
     └── epss.py         # EPSS score enrichment
 ```
 
-## Roadmap
+## Pipeline Integration
 
-- **Reticustos Integration**: Accept Reticustos scan results as an input source, enabling network security findings (Nmap, Nuclei, testssl.sh, Nikto, Masscan, Shodan) to be deduplicated and correlated alongside application security findings
-- **Ariadne Integration**: Export deduplicated, enriched findings to Ariadne for attack path synthesis — vinculum normalises and deduplicates, Ariadne builds the kill chain
-- **Bidirectional SARIF Pipeline**: Serve as a shared correlation layer between Reticustos (upstream scanner orchestration) and Ariadne (downstream attack path modelling)
+Vinculum serves as the correlation layer in the Reticustos → Vinculum → Ariadne security pipeline:
+
+```
+Reticustos (scan orchestration)
+  │  Nmap, Nuclei, testssl, Nikto, Masscan, Shodan
+  │
+  ▼  JSON export
+Vinculum (correlation engine)
+  │  Deduplicate, fingerprint, EPSS enrich, correlate
+  │
+  ▼  vinculum-ariadne-export format
+Ariadne (attack path synthesis)
+     Build knowledge graph, synthesize attack paths, generate playbooks
+```
+
+### Reticustos → Vinculum
+
+```bash
+# Export from Reticustos API
+curl -o scan_export.json "http://localhost:8000/api/exports/findings/json?scan_id=SCAN_ID"
+
+# Ingest into Vinculum
+vinculum ingest scan_export.json --format ariadne --output correlated.json
+```
+
+The Reticustos parser handles findings from all integrated scanners (Nmap, Nuclei, testssl.sh, Nikto, Masscan, Shodan), including SSL/TLS analysis results. MITRE ATT&CK mappings and false positive filtering are preserved through the pipeline.
+
+### Vinculum → Ariadne
+
+```bash
+# Feed into Ariadne for attack path analysis
+ariadne analyze correlated.json --output report --format html --playbook
+```
+
+The Ariadne export preserves Vinculum correlation metadata (fingerprints, source tools, EPSS scores, correlation IDs) in the knowledge graph for enriched attack path scoring.
 
 ## Contributing
 
