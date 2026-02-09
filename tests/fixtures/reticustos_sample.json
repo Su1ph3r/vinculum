@@ -1,0 +1,261 @@
+{
+  "export_metadata": {
+    "tool": "Reticustos",
+    "version": "1.2.0",
+    "export_date": "2025-01-15T10:30:00Z",
+    "scan_id": "scan-abc-123",
+    "target": "192.168.1.0/24"
+  },
+  "hosts": [
+    {
+      "ip": "192.168.1.10",
+      "hostname": "web01.example.com",
+      "os": "Ubuntu 22.04",
+      "mac": "00:11:22:33:44:55"
+    },
+    {
+      "ip": "192.168.1.20",
+      "hostname": "db01.example.com",
+      "os": "Debian 11",
+      "mac": "00:11:22:33:44:66"
+    }
+  ],
+  "services": [
+    {
+      "host_ip": "192.168.1.10",
+      "port": 443,
+      "protocol": "tcp",
+      "name": "https",
+      "product": "nginx",
+      "version": "1.18.0"
+    },
+    {
+      "host_ip": "192.168.1.10",
+      "port": 22,
+      "protocol": "tcp",
+      "name": "ssh",
+      "product": "OpenSSH",
+      "version": "8.9p1"
+    },
+    {
+      "host_ip": "192.168.1.20",
+      "port": 3306,
+      "protocol": "tcp",
+      "name": "mysql",
+      "product": "MySQL",
+      "version": "8.0.32"
+    }
+  ],
+  "findings": [
+    {
+      "id": "finding-001",
+      "tool": "nuclei",
+      "title": "Apache Log4j RCE (CVE-2021-44228)",
+      "description": "Remote code execution via JNDI injection in Apache Log4j2.",
+      "severity": "critical",
+      "confidence": "high",
+      "host_ip": "192.168.1.10",
+      "port": 443,
+      "protocol": "tcp",
+      "hostname": "web01.example.com",
+      "url": "https://web01.example.com/api/endpoint",
+      "cve_id": "CVE-2021-44228",
+      "cve_ids": ["CVE-2021-44228", "CVE-2021-45046"],
+      "cwe_id": "CWE-917",
+      "cvss_score": 10.0,
+      "status": "confirmed",
+      "evidence": "JNDI lookup detected in User-Agent header processing",
+      "remediation": "Upgrade Log4j to version 2.17.1 or later",
+      "references": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2021-44228",
+        "https://logging.apache.org/log4j/2.x/security.html"
+      ],
+      "mitre": {
+        "tactics": ["Initial Access", "Execution"],
+        "techniques": ["T1190", "T1059"]
+      },
+      "tags": ["rce", "log4j", "jndi"]
+    },
+    {
+      "id": "finding-002",
+      "tool": "nikto",
+      "title": "X-Frame-Options Header Missing",
+      "description": "The X-Frame-Options header is not set, which may allow clickjacking attacks.",
+      "severity": "medium",
+      "confidence": "certain",
+      "host_ip": "192.168.1.10",
+      "port": 443,
+      "protocol": "tcp",
+      "hostname": "web01.example.com",
+      "url": "https://web01.example.com/",
+      "cve_id": null,
+      "cve_ids": [],
+      "cwe_id": "CWE-1021",
+      "cvss_score": null,
+      "status": "confirmed",
+      "evidence": "Missing X-Frame-Options response header",
+      "remediation": "Add X-Frame-Options: DENY or SAMEORIGIN header",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/"
+      ],
+      "mitre": null,
+      "tags": ["headers", "clickjacking"]
+    },
+    {
+      "id": "finding-003",
+      "tool": "nmap",
+      "title": "MySQL Remote Access Enabled",
+      "description": "MySQL service is accessible from external network on port 3306.",
+      "severity": "high",
+      "confidence": "firm",
+      "host_ip": "192.168.1.20",
+      "port": 3306,
+      "protocol": "tcp",
+      "hostname": "db01.example.com",
+      "url": null,
+      "cve_id": null,
+      "cve_ids": [],
+      "cwe_id": "CWE-284",
+      "cvss_score": null,
+      "status": "confirmed",
+      "evidence": "Port 3306/tcp open - MySQL 8.0.32",
+      "remediation": "Restrict MySQL access to trusted IP addresses using firewall rules",
+      "references": [],
+      "mitre": {
+        "tactics": ["Discovery"],
+        "techniques": ["T1046"]
+      },
+      "tags": ["database", "network-exposure"]
+    },
+    {
+      "id": "finding-004",
+      "tool": "shodan",
+      "title": "SSH Service Detected",
+      "description": "SSH service running on port 22.",
+      "severity": "info",
+      "confidence": "certain",
+      "host_ip": "192.168.1.10",
+      "port": 22,
+      "protocol": "tcp",
+      "hostname": "web01.example.com",
+      "url": null,
+      "cve_id": null,
+      "cve_ids": [],
+      "cwe_id": null,
+      "cvss_score": null,
+      "status": "confirmed",
+      "evidence": "OpenSSH 8.9p1 Ubuntu-3ubuntu0.4",
+      "remediation": null,
+      "references": [],
+      "mitre": null,
+      "tags": ["ssh", "service-detection"]
+    },
+    {
+      "id": "finding-005",
+      "tool": "masscan",
+      "title": "Open Port 443/tcp Detected",
+      "description": "Port 443 found open during mass port scan.",
+      "severity": "info",
+      "confidence": "firm",
+      "host_ip": "192.168.1.10",
+      "port": 443,
+      "protocol": "tcp",
+      "hostname": "web01.example.com",
+      "url": null,
+      "cve_id": null,
+      "cve_ids": [],
+      "cwe_id": null,
+      "cvss_score": null,
+      "status": "confirmed",
+      "evidence": "443/tcp open",
+      "remediation": null,
+      "references": [],
+      "mitre": null,
+      "tags": ["port-scan"]
+    },
+    {
+      "id": "finding-006",
+      "tool": "nuclei",
+      "title": "Reflected XSS in Search Parameter",
+      "description": "Reflected cross-site scripting vulnerability in the search parameter.",
+      "severity": "high",
+      "confidence": "firm",
+      "host_ip": "192.168.1.10",
+      "port": 443,
+      "protocol": "tcp",
+      "hostname": "web01.example.com",
+      "url": "https://web01.example.com/search?q=test",
+      "cve_id": null,
+      "cve_ids": [],
+      "cwe_id": "CWE-79",
+      "cvss_score": 6.1,
+      "status": "confirmed",
+      "evidence": "Payload <script>alert(1)</script> reflected in response",
+      "remediation": "Sanitize and encode user input before reflecting in HTML",
+      "references": [
+        "https://owasp.org/www-community/attacks/xss/"
+      ],
+      "mitre": {
+        "tactics": ["Initial Access"],
+        "techniques": ["T1189"]
+      },
+      "tags": ["xss", "injection"]
+    },
+    {
+      "id": "finding-007",
+      "tool": "nuclei",
+      "title": "WordPress Login Page Exposed",
+      "description": "WordPress login page found, potential brute force target.",
+      "severity": "low",
+      "confidence": "tentative",
+      "host_ip": "192.168.1.10",
+      "port": 443,
+      "protocol": "tcp",
+      "hostname": "web01.example.com",
+      "url": "https://web01.example.com/wp-login.php",
+      "cve_id": null,
+      "cve_ids": [],
+      "cwe_id": null,
+      "cvss_score": null,
+      "status": "false_positive",
+      "evidence": "Login page detected at /wp-login.php",
+      "remediation": "Restrict access to login page or implement CAPTCHA",
+      "references": [],
+      "mitre": null,
+      "tags": ["wordpress", "brute-force"]
+    }
+  ],
+  "ssl_analyses": [
+    {
+      "host_ip": "192.168.1.10",
+      "port": 443,
+      "hostname": "web01.example.com",
+      "certificate": {
+        "subject": "CN=web01.example.com",
+        "issuer": "CN=Let's Encrypt Authority X3",
+        "not_before": "2024-01-01T00:00:00Z",
+        "not_after": "2024-04-01T00:00:00Z",
+        "expired": true,
+        "days_until_expiry": -287,
+        "serial": "03:ab:cd:ef:12:34:56:78"
+      },
+      "protocols": {
+        "SSLv3": false,
+        "TLSv1.0": true,
+        "TLSv1.1": true,
+        "TLSv1.2": true,
+        "TLSv1.3": true
+      },
+      "vulnerabilities": {
+        "heartbleed": false,
+        "poodle": true,
+        "drown": false,
+        "robot": false,
+        "beast": false
+      },
+      "weak_ciphers": [
+        "TLS_RSA_WITH_RC4_128_SHA"
+      ]
+    }
+  ]
+}

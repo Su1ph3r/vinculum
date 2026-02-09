@@ -14,6 +14,7 @@ from vinculum.correlation.engine import correlate_findings
 from vinculum.enrichment.epss import EPSSEnricher
 from vinculum.logging import setup_logging
 from vinculum.models.finding import UnifiedFinding
+from vinculum.output.ariadne_output import AriadneOutputFormatter
 from vinculum.output.console_output import ConsoleOutputFormatter
 from vinculum.output.json_output import JSONOutputFormatter
 from vinculum.output.sarif_output import SARIFOutputFormatter
@@ -23,6 +24,7 @@ from vinculum.parsers.nessus import NessusParser
 from vinculum.parsers.nuclei import NucleiParser
 from vinculum.parsers.semgrep import SemgrepParser
 from vinculum.parsers.trivy import TrivyParser
+from vinculum.parsers.reticustos import ReticustosParser
 from vinculum.parsers.zap import ZAPParser
 from vinculum.suppression import SuppressionManager
 
@@ -35,6 +37,7 @@ ParserRegistry.register(SemgrepParser())
 ParserRegistry.register(NucleiParser())
 ParserRegistry.register(TrivyParser())
 ParserRegistry.register(ZAPParser())
+ParserRegistry.register(ReticustosParser())
 
 
 @click.group()
@@ -57,7 +60,7 @@ def cli():
     "--format",
     "-f",
     "output_format",
-    type=click.Choice(["json", "console", "sarif"]),
+    type=click.Choice(["json", "console", "sarif", "ariadne"]),
     default=None,
     help="Output format (default: console)",
 )
@@ -297,6 +300,15 @@ def ingest(
             formatter = SARIFOutputFormatter(pretty=True)
             formatter.write(result, output_path)
             console.print(f"[green]SARIF results written to {output_path}[/green]")
+    elif effective_format == "ariadne":
+        if not effective_output:
+            formatter = AriadneOutputFormatter(pretty=True, include_raw=effective_include_raw)
+            print(formatter.format(result))
+        else:
+            output_path = Path(effective_output)
+            formatter = AriadneOutputFormatter(pretty=True, include_raw=effective_include_raw)
+            formatter.write(result, output_path)
+            console.print(f"[green]Ariadne export written to {output_path}[/green]")
     else:
         formatter = ConsoleOutputFormatter(console=console, verbose=verbose)
         formatter.print(result)

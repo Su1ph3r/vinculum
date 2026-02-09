@@ -11,6 +11,7 @@ from vinculum.parsers.nessus import NessusParser
 from vinculum.parsers.nuclei import NucleiParser
 from vinculum.parsers.semgrep import SemgrepParser
 from vinculum.parsers.trivy import TrivyParser
+from vinculum.parsers.reticustos import ReticustosParser
 from vinculum.parsers.zap import ZAPParser
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -195,6 +196,128 @@ class TestSemgrepParser:
 
         assert xss.remediation is not None
         assert "fix" in xss.remediation.lower()
+
+
+class TestReticustosParser:
+    """Tests for Reticustos JSON parser."""
+
+    @pytest.fixture
+    def parser(self):
+        return ReticustosParser()
+
+    @pytest.fixture
+    def sample_file(self):
+        return FIXTURES_DIR / "reticustos_sample.json"
+
+    def test_tool_name(self, parser):
+        assert parser.tool_name == "reticustos"
+
+    def test_supported_extensions(self, parser):
+        assert ".json" in parser.supported_extensions
+
+    def test_supports_file(self, parser, sample_file):
+        assert parser.supports_file(sample_file)
+
+    def test_does_not_support_non_reticustos_json(self, parser, tmp_path):
+        """Should not match generic JSON files."""
+        other = tmp_path / "other.json"
+        other.write_text('{"results": []}')
+        assert not parser.supports_file(other)
+
+    def test_parse_returns_findings(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        # 6 scanner findings (7 minus 1 false_positive) + 3 SSL findings
+        # SSL: expired cert, weak protocols, poodle
+        assert len(findings) == 9
+
+    def test_parse_skips_false_positive(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        titles = [f.title for f in findings]
+        assert "WordPress Login Page Exposed" not in titles
+
+    def test_parse_critical_finding(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        log4j = next(f for f in findings if "Log4j" in f.title)
+
+        assert log4j.source_tool == "reticustos:nuclei"
+        assert log4j.severity == Severity.CRITICAL
+        assert "CVE-2021-44228" in log4j.cve_ids
+        assert "CVE-2021-45046" in log4j.cve_ids
+        assert "CWE-917" in log4j.cwe_ids
+        assert log4j.cvss_score == 10.0
+        assert log4j.finding_type == FindingType.DAST
+        assert log4j.location.host == "192.168.1.10"
+        assert log4j.location.port == 443
+
+    def test_parse_network_finding_type(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        nmap_finding = next(f for f in findings if "MySQL" in f.title)
+
+        assert nmap_finding.source_tool == "reticustos:nmap"
+        assert nmap_finding.finding_type == FindingType.NETWORK
+        assert nmap_finding.severity == Severity.HIGH
+
+    def test_parse_dast_finding_type(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        nikto_finding = next(f for f in findings if "X-Frame-Options" in f.title)
+
+        assert nikto_finding.source_tool == "reticustos:nikto"
+        assert nikto_finding.finding_type == FindingType.DAST
+
+    def test_parse_mitre_tags(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        log4j = next(f for f in findings if "Log4j" in f.title)
+
+        assert "mitre:tactic:Initial Access" in log4j.tags
+        assert "mitre:tactic:Execution" in log4j.tags
+        assert "mitre:technique:T1190" in log4j.tags
+        assert "mitre:technique:T1059" in log4j.tags
+
+    def test_parse_ssl_expired_cert(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        expired = next(f for f in findings if "Certificate Expired" in f.title)
+
+        assert expired.source_tool == "reticustos:testssl"
+        assert expired.severity == Severity.HIGH
+        assert "CWE-295" in expired.cwe_ids
+        assert expired.finding_type == FindingType.OTHER
+
+    def test_parse_ssl_weak_protocols(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        weak = next(f for f in findings if "Weak TLS" in f.title)
+
+        assert weak.severity == Severity.MEDIUM
+        assert "TLSv1.0" in weak.description
+        assert "TLSv1.1" in weak.description
+
+    def test_parse_ssl_poodle(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        poodle = next(f for f in findings if "POODLE" in f.title)
+
+        assert poodle.severity == Severity.MEDIUM
+        assert "CVE-2014-3566" in poodle.cve_ids
+
+    def test_parse_includes_evidence(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        log4j = next(f for f in findings if "Log4j" in f.title)
+
+        assert log4j.evidence is not None
+        assert "JNDI" in log4j.evidence
+
+    def test_parse_includes_remediation(self, parser, sample_file):
+        findings = parser.parse(sample_file)
+        log4j = next(f for f in findings if "Log4j" in f.title)
+
+        assert log4j.remediation is not None
+        assert "2.17.1" in log4j.remediation
+
+    def test_reticustos_invalid_json(self, tmp_path):
+        parser = ReticustosParser()
+        bad_file = tmp_path / "bad.json"
+        bad_file.write_text("this is not json")
+
+        with pytest.raises(ParseError):
+            parser.parse(bad_file)
 
 
 class TestParserRegistry:

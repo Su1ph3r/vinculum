@@ -7,10 +7,12 @@ import pytest
 
 from vinculum.correlation.engine import correlate_findings
 from vinculum.models.enums import Severity
+from vinculum.output.ariadne_output import AriadneOutputFormatter
 from vinculum.output.json_output import JSONOutputFormatter
 from vinculum.parsers.base import ParserRegistry
 from vinculum.parsers.burp import BurpParser
 from vinculum.parsers.nessus import NessusParser
+from vinculum.parsers.reticustos import ReticustosParser
 from vinculum.parsers.semgrep import SemgrepParser
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -23,6 +25,7 @@ def setup_parsers():
     ParserRegistry.register(BurpParser())
     ParserRegistry.register(NessusParser())
     ParserRegistry.register(SemgrepParser())
+    ParserRegistry.register(ReticustosParser())
 
 
 class TestFullPipeline:
@@ -183,3 +186,83 @@ class TestEdgeCases:
         # Should be valid JSON
         data = json.loads(json_str)
         assert data is not None
+
+
+class TestReticustosAriadneRoundTrip:
+    """Integration test: Reticustos → Vinculum → Ariadne export round-trip."""
+
+    def test_reticustos_to_ariadne_pipeline(self):
+        """Parse Reticustos fixture, correlate, export as Ariadne format, validate structure."""
+        # Step 1: Parse Reticustos export
+        parser = ReticustosParser()
+        findings = parser.parse(FIXTURES_DIR / "reticustos_sample.json")
+        assert len(findings) > 0
+
+        # Step 2: Correlate findings
+        result = correlate_findings(findings)
+        assert result.unique_count > 0
+
+        # Step 3: Export as Ariadne format
+        formatter = AriadneOutputFormatter(pretty=True)
+        ariadne_json = formatter.format(result)
+
+        # Step 4: Validate JSON structure
+        data = json.loads(ariadne_json)
+
+        # Top-level schema
+        assert data["format"] == "vinculum-ariadne-export"
+        assert data["format_version"] == "1.0"
+        assert "metadata" in data
+        assert "generated_at" in data["metadata"]
+
+        # Hosts extracted from findings
+        assert len(data["hosts"]) > 0
+        for host in data["hosts"]:
+            assert "ip" in host
+
+        # Services extracted from findings
+        assert len(data["services"]) > 0
+        for service in data["services"]:
+            assert "port" in service
+            assert "protocol" in service
+            assert "host_ip" in service
+
+        # Vulnerabilities (findings with CVEs or non-info DAST/NETWORK)
+        assert len(data["vulnerabilities"]) > 0
+        for vuln in data["vulnerabilities"]:
+            assert "title" in vuln
+            assert "severity" in vuln
+            assert "vinculum_metadata" in vuln
+            meta = vuln["vinculum_metadata"]
+            assert "correlation_id" in meta
+            assert "fingerprint" in meta
+            assert "source_tools" in meta
+
+        # Misconfigurations (info-level without CVE)
+        # Our fixture has info-level findings that should be misconfigs
+        assert "misconfigurations" in data
+
+        # Relationships
+        assert len(data["relationships"]) > 0
+        rel_types = {r["relation_type"] for r in data["relationships"]}
+        assert "runs_on" in rel_types
+
+        # Verify host IPs from the fixture appear in the output
+        host_ips = {h["ip"] for h in data["hosts"]}
+        assert "192.168.1.10" in host_ips
+        assert "192.168.1.20" in host_ips
+
+    def test_reticustos_to_ariadne_write_file(self, tmp_path):
+        """Test full pipeline with file output."""
+        parser = ReticustosParser()
+        findings = parser.parse(FIXTURES_DIR / "reticustos_sample.json")
+        result = correlate_findings(findings)
+
+        output_path = tmp_path / "vinculum_ariadne_out.json"
+        formatter = AriadneOutputFormatter(pretty=True)
+        formatter.write(result, output_path)
+
+        assert output_path.exists()
+        data = json.loads(output_path.read_text())
+        assert data["format"] == "vinculum-ariadne-export"
+        assert len(data["vulnerabilities"]) + len(data["misconfigurations"]) > 0
