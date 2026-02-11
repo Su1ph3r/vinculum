@@ -22,7 +22,7 @@ class OutputConfig(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    format: Literal["json", "console", "sarif"] = "console"
+    format: Literal["json", "console", "sarif", "ariadne", "burrito"] = "console"
     path: str | None = None
     pretty: bool = True
     include_raw: bool = False

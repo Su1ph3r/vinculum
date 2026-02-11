@@ -39,11 +39,14 @@ class JSONOutputFormatter:
 
     def _build_output(self, result: CorrelationResult) -> dict[str, Any]:
         """Build the output dictionary."""
+        metadata: dict[str, Any] = {
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "vinculum_version": __version__,
+        }
+        if result.metadata.get("run_id"):
+            metadata["run_id"] = result.metadata["run_id"]
         return {
-            "metadata": {
-                "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                "vinculum_version": __version__,
-            },
+            "metadata": metadata,
             "summary": {
                 "total_findings": result.original_count,
                 "unique_issues": result.unique_count,

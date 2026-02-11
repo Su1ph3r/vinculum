@@ -1,0 +1,108 @@
+{
+  "format": "vinculum-ariadne-export",
+  "format_version": "1.1",
+  "metadata": {
+    "generated_at": "2026-02-10T12:00:00Z",
+    "vinculum_version": "0.2.0",
+    "run_id": "feedback-loop-001"
+  },
+  "hosts": [
+    {
+      "ip": "10.0.1.50",
+      "hostname": "api.corp.local",
+      "os": null
+    }
+  ],
+  "services": [
+    {
+      "port": 443,
+      "protocol": "tcp",
+      "name": "https",
+      "product": "nginx",
+      "version": "1.24.0",
+      "host_ip": "10.0.1.50"
+    }
+  ],
+  "vulnerabilities": [
+    {
+      "title": "SQL Injection in User Search",
+      "severity": "critical",
+      "host_ip": "10.0.1.50",
+      "port": 443,
+      "protocol": "tcp",
+      "cve_id": "CVE-2024-1234",
+      "cvss_score": 9.8,
+      "description": "SQL injection vulnerability found in the user search endpoint.",
+      "vinculum_metadata": {
+        "correlation_id": "corr-001",
+        "fingerprint": "fp-abc123",
+        "source_tools": ["indago", "burp"],
+        "finding_count": 2,
+        "epss_score": 0.85,
+        "epss_percentile": 0.97
+      }
+    },
+    {
+      "title": "Broken Authentication - JWT None Algorithm",
+      "severity": "high",
+      "host_ip": "10.0.1.50",
+      "port": 443,
+      "protocol": "tcp",
+      "description": "The API accepts JWT tokens with 'none' algorithm.",
+      "vinculum_metadata": {
+        "correlation_id": "corr-002",
+        "fingerprint": "fp-def456",
+        "source_tools": ["indago"],
+        "finding_count": 1,
+        "epss_score": null,
+        "epss_percentile": null
+      }
+    }
+  ],
+  "misconfigurations": [
+    {
+      "title": "X-Frame-Options Header Missing",
+      "severity": "medium",
+      "host_ip": "10.0.1.50",
+      "port": 443,
+      "protocol": "tcp",
+      "check_id": "header-001",
+      "remediation": "Add X-Frame-Options: DENY header",
+      "description": "The X-Frame-Options header is not set.",
+      "vinculum_metadata": {
+        "correlation_id": "corr-003",
+        "fingerprint": "fp-ghi789",
+        "source_tools": ["reticustos"],
+        "finding_count": 1,
+        "epss_score": null,
+        "epss_percentile": null
+      }
+    }
+  ],
+  "cloud_resources": [],
+  "containers": [],
+  "mobile_apps": [],
+  "api_endpoints": [
+    {
+      "url": "https://api.corp.local/api/v1/users/search",
+      "method": "GET",
+      "parameters": ["query"]
+    }
+  ],
+  "relationships": [
+    {
+      "source_type": "service",
+      "source_key": "10.0.1.50:443/tcp",
+      "target_type": "host",
+      "target_key": "10.0.1.50",
+      "relation_type": "runs_on"
+    },
+    {
+      "source_type": "service",
+      "source_key": "10.0.1.50:443/tcp",
+      "target_type": "vulnerability",
+      "target_key": "CVE-2024-1234:10.0.1.50",
+      "relation_type": "has_api_vulnerability"
+    }
+  ]
+}

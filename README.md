@@ -6,10 +6,14 @@
 
 ## Features
 
-- **Multi-Tool Ingestion**: Parse findings from 12 security tools including Burp Suite, Nessus, Semgrep, Nuclei, Trivy, OWASP ZAP, Reticustos, Nubicustos, Indago, Mobilicustos, Cepheus, and BypassBurrito
+- **Multi-Tool Ingestion**: Parse findings from 13 security tools including Burp Suite, Nessus, Semgrep, Nuclei, Trivy, OWASP ZAP, Reticustos, Nubicustos, Indago, Mobilicustos, Cepheus, BypassBurrito, and Ariadne (closed-loop)
 - **Intelligent Correlation**: Deduplicate findings across tools using fingerprint-based and semantic matching
+- **Cross-Tool Enrichment**: Automatic linking of findings across tool boundaries with confidence boosting and provenance chains
+- **Incremental Correlation**: Re-correlate against a baseline to process only new findings (`--baseline`)
+- **Custom Parser Plugins**: Load parsers from external directories (`--parser-dir`)
 - **SARIF Output**: Export results in SARIF 2.1.0 format for CI/CD integration
-- **Ariadne Export**: Export correlated findings for attack path synthesis in Ariadne knowledge graphs
+- **Ariadne Export**: Export correlated findings with relationship confidence weights for attack path synthesis
+- **BypassBurrito Export**: Extract WAF-blocked findings as input for WAF bypass testing (`--format burrito`)
 - **EPSS Enrichment**: Enrich findings with Exploit Prediction Scoring System data
 - **AI-Powered Correlation**: Optional semantic correlation using OpenAI, Anthropic, Ollama, or LM Studio
 - **Suppression Rules**: Filter out false positives and accepted risks via configuration
@@ -49,6 +53,18 @@ vinculum ingest scan_results/* --format ariadne --output findings.json
 
 # Ingest Reticustos scan exports
 vinculum ingest reticustos_export.json --format ariadne --output findings.json
+
+# Export WAF-blocked findings for BypassBurrito
+vinculum ingest indago_results.json --format burrito --output waf-targets.json
+
+# Tag a pipeline run for tracking
+vinculum ingest scan_results/* --run-id pipeline-2026-02-11 --format json --output results.json
+
+# Incremental mode — only correlate new findings against a baseline
+vinculum ingest new_scan.json --baseline results.json --format json --output updated.json
+
+# Load custom parsers from a directory
+vinculum ingest custom_tool.xyz --parser-dir ./my-parsers/ --format json --output results.json
 
 # Filter by minimum severity
 vinculum ingest findings.xml --min-severity high
@@ -99,18 +115,19 @@ vinculum ingest scan_results/* --config vinculum.yaml
 
 | Tool | Format | Extension | Finding Type |
 |------|--------|-----------|--------------|
+| Ariadne | JSON | `.json` | Closed-loop re-ingestion |
 | Burp Suite | XML | `.xml` | DAST |
-| Nessus | XML | `.nessus` | Network |
-| Semgrep | JSON | `.json` | SAST |
-| Nuclei | JSONL | `.json`, `.jsonl` | DAST |
-| Trivy | JSON | `.json` | Container/Dependency |
-| OWASP ZAP | XML | `.xml` | DAST |
-| Reticustos | JSON | `.json` | Network/DAST/SSL |
-| Nubicustos | JSON | `.json` | Cloud (AWS/Azure/GCP/K8s) |
+| BypassBurrito | JSON | `.json` | WAF Bypass |
+| Cepheus | JSON | `.json` | Container Escape |
 | Indago | JSON | `.json` | API/DAST |
 | Mobilicustos | JSON | `.json` | Mobile |
-| Cepheus | JSON | `.json` | Container Escape |
-| BypassBurrito | JSON | `.json` | WAF Bypass |
+| Nessus | XML | `.nessus` | Network |
+| Nubicustos | JSON | `.json` | Cloud (AWS/Azure/GCP/K8s) |
+| Nuclei | JSONL | `.json`, `.jsonl` | DAST |
+| OWASP ZAP | XML | `.xml` | DAST |
+| Reticustos | JSON | `.json` | Network/DAST/SSL |
+| Semgrep | JSON | `.json` | SAST |
+| Trivy | JSON | `.json` | Container/Dependency |
 
 ## CLI Reference
 
@@ -123,7 +140,7 @@ Usage: vinculum ingest [OPTIONS] FILES...
 
 Options:
   -c, --config PATH          Path to configuration file
-  -f, --format [json|console|sarif|ariadne]
+  -f, --format [json|console|sarif|ariadne|burrito]
                              Output format (default: console)
   -o, --output PATH          Output file path
   --min-severity [critical|high|medium|low|info]
@@ -139,6 +156,9 @@ Options:
   --log-level [debug|info|warning|error]
                              Logging level
   -v, --verbose              Verbose output
+  --run-id TEXT              Pipeline run identifier
+  --parser-dir PATH          Custom parser plugin directory (repeatable)
+  --baseline PATH            Previous results file for incremental correlation
 ```
 
 ### `vinculum stats`
@@ -286,7 +306,11 @@ Standard format for static analysis tools, compatible with:
 
 ### Ariadne
 
-Structured JSON export (`vinculum-ariadne-export` format) designed for ingestion by [Ariadne](https://github.com/Su1ph3r/ariadne). Contains hosts, services, vulnerabilities, misconfigurations, and relationships with Vinculum correlation metadata (fingerprints, source tools, EPSS scores) preserved for graph enrichment.
+Structured JSON export (`vinculum-ariadne-export` format) designed for ingestion by [Ariadne](https://github.com/Su1ph3r/ariadne). Contains hosts, services, vulnerabilities, misconfigurations, and relationships with Vinculum correlation metadata (fingerprints, source tools, EPSS scores) preserved for graph enrichment. Relationships include confidence weights and evidence strength scores.
+
+### BypassBurrito
+
+Extracts WAF-blocked Indago findings and formats them as targets for [BypassBurrito](https://github.com/Su1ph3r/bypassburrito) WAF bypass payload generation. Detects WAF blocking by status codes (403/406/429), WAF keywords, and tags.
 
 ## Architecture
 
@@ -300,29 +324,32 @@ vinculum/
 │   ├── finding.py      # UnifiedFinding, FindingLocation, CorrelationGroup
 │   └── enums.py        # Severity, Confidence, FindingType
 ├── parsers/
-│   ├── base.py         # BaseParser, ParserRegistry
+│   ├── base.py         # BaseParser, ParserRegistry, plugin loading
+│   ├── ariadne.py      # Ariadne closed-loop parser
 │   ├── burp.py         # Burp Suite XML parser
-│   ├── nessus.py       # Nessus XML parser
-│   ├── semgrep.py      # Semgrep JSON parser
-│   ├── nuclei.py       # Nuclei JSONL parser
-│   ├── trivy.py        # Trivy JSON parser
-│   ├── zap.py          # OWASP ZAP XML parser
-│   ├── reticustos.py   # Reticustos JSON parser
-│   ├── nubicustos.py   # Nubicustos cloud parser
+│   ├── bypassburrito.py # BypassBurrito WAF bypass parser
+│   ├── cepheus.py      # Cepheus container escape parser
 │   ├── indago.py       # Indago API fuzzer parser
 │   ├── mobilicustos.py # Mobilicustos mobile parser
-│   ├── cepheus.py      # Cepheus container escape parser
-│   └── bypassburrito.py # BypassBurrito WAF bypass parser
+│   ├── nessus.py       # Nessus XML parser
+│   ├── nubicustos.py   # Nubicustos cloud parser
+│   ├── nuclei.py       # Nuclei JSONL parser
+│   ├── reticustos.py   # Reticustos JSON parser
+│   ├── semgrep.py      # Semgrep JSON parser
+│   ├── trivy.py        # Trivy JSON parser
+│   └── zap.py          # OWASP ZAP XML parser
 ├── correlation/
-│   ├── engine.py       # Correlation engine
+│   ├── engine.py       # Correlation engine (full + incremental)
 │   ├── fingerprint.py  # Fingerprint generation
 │   └── ai_correlator.py # AI-powered correlation
 ├── output/
+│   ├── ariadne_output.py  # Ariadne export with confidence weights
+│   ├── burrito_output.py  # BypassBurrito export formatter
 │   ├── console_output.py  # Console formatter
 │   ├── json_output.py     # JSON formatter
-│   ├── sarif_output.py    # SARIF formatter
-│   └── ariadne_output.py  # Ariadne export formatter
+│   └── sarif_output.py    # SARIF formatter
 └── enrichment/
+    ├── cross_tool.py   # Cross-tool enrichment + provenance chains
     └── epss.py         # EPSS score enrichment
 ```
 
@@ -340,7 +367,7 @@ All tools ──findings──> Vinculum (correlation) ──export──> Ariad
 
 ### Importing Findings
 
-Vinculum ingests findings from all 12 supported tools. Each parser auto-detects its format:
+Vinculum ingests findings from all 13 supported tools. Each parser auto-detects its format:
 
 ```bash
 # Ingest from any combination of tools

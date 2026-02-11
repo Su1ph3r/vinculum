@@ -7,7 +7,7 @@ from typing import Any
 
 from vinculum import __version__
 from vinculum.correlation.engine import CorrelationResult
-from vinculum.models.enums import FindingType, Severity
+from vinculum.models.enums import Confidence, FindingType, Severity
 from vinculum.models.finding import CorrelationGroup, UnifiedFinding
 
 
@@ -138,6 +138,20 @@ class AriadneOutputFormatter:
             # Determine relation type based on finding type
             relation_type = self._relation_type_for_finding(primary, is_vuln)
 
+            # Confidence weights for this relationship
+            rel_confidence = self._relationship_confidence(group)
+            evidence = self._evidence_strength(group)
+            confirmed = sorted(
+                {t for f in group.findings for t in f.confirmed_by}
+            )
+
+            rel_extra = {
+                "confidence": rel_confidence,
+                "evidence_strength": evidence,
+            }
+            if confirmed:
+                rel_extra["confirmed_by"] = confirmed
+
             if host_ip and loc.port:
                 svc_key = f"{host_ip}:{loc.port}/{loc.protocol or 'tcp'}"
                 relationships.append({
@@ -146,6 +160,7 @@ class AriadneOutputFormatter:
                     "target_type": finding_type_label,
                     "target_key": finding_key,
                     "relation_type": relation_type,
+                    **rel_extra,
                 })
             elif host_ip:
                 relationships.append({
@@ -154,15 +169,20 @@ class AriadneOutputFormatter:
                     "target_type": finding_type_label,
                     "target_key": finding_key,
                     "relation_type": relation_type,
+                    **rel_extra,
                 })
+
+        metadata: dict[str, Any] = {
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "vinculum_version": __version__,
+        }
+        if result.metadata.get("run_id"):
+            metadata["run_id"] = result.metadata["run_id"]
 
         return {
             "format": "vinculum-ariadne-export",
             "format_version": "1.1",
-            "metadata": {
-                "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                "vinculum_version": __version__,
-            },
+            "metadata": metadata,
             "hosts": list(hosts.values()),
             "services": list(services.values()),
             "vulnerabilities": vulnerabilities,
@@ -173,6 +193,47 @@ class AriadneOutputFormatter:
             "api_endpoints": list(api_endpoints.values()),
             "relationships": relationships,
         }
+
+    def _relationship_confidence(self, group: CorrelationGroup) -> str:
+        """Determine relationship confidence based on tool sources and finding confidence."""
+        tool_count = len(group.tool_sources)
+        # Check if any finding has CERTAIN confidence
+        has_certain = any(
+            f.confidence in ("certain", Confidence.CERTAIN) for f in group.findings
+        )
+        if tool_count >= 2 or has_certain:
+            return "certain"
+        has_firm = any(
+            f.confidence in ("firm", Confidence.FIRM) for f in group.findings
+        )
+        if has_firm:
+            return "firm"
+        return "tentative"
+
+    def _evidence_strength(self, group: CorrelationGroup) -> float:
+        """
+        Calculate evidence strength as a 0.0-1.0 float.
+
+        Components:
+        - Multi-tool: +0.25 per tool, capped at 0.5
+        - CVE presence: +0.2
+        - Exploitation confirmed: +0.3
+        """
+        strength = 0.0
+
+        # Multi-tool contribution
+        tool_count = len(group.tool_sources)
+        strength += min(tool_count * 0.25, 0.5)
+
+        # CVE presence
+        if group.all_cves:
+            strength += 0.2
+
+        # Exploitation confirmed
+        if any(f.exploitation_confirmed for f in group.findings):
+            strength += 0.3
+
+        return round(min(strength, 1.0), 2)
 
     def _relation_type_for_finding(self, finding: UnifiedFinding, is_vuln: bool) -> str:
         """Determine the relationship type based on finding type."""

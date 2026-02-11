@@ -443,3 +443,172 @@ class TestAriadneApiEndpoints:
 
         rel_types = {r["relation_type"] for r in data["relationships"]}
         assert "has_api_vulnerability" in rel_types
+
+
+class TestRelationshipConfidenceWeights:
+    """Tests for relationship confidence weights in Ariadne export."""
+
+    def test_single_tool_tentative_confidence(self, formatter):
+        findings = [
+            _make_finding(
+                source_tool="nuclei",
+                source_id="n-1",
+                title="XSS",
+                severity=Severity.HIGH,
+                confidence=Confidence.TENTATIVE,
+                location=FindingLocation(host="10.0.0.1", port=443, protocol="tcp"),
+            ),
+        ]
+        result = correlate_findings(findings)
+        data = json.loads(formatter.format(result))
+
+        finding_rels = [r for r in data["relationships"] if r["relation_type"] != "runs_on"]
+        assert len(finding_rels) >= 1
+        rel = finding_rels[0]
+        assert rel["confidence"] == "tentative"
+
+    def test_multi_tool_certain_confidence(self, formatter):
+        findings = [
+            _make_finding(
+                source_tool="nuclei",
+                source_id="n-1",
+                title="SQLi",
+                severity=Severity.CRITICAL,
+                confidence=Confidence.FIRM,
+                cve_ids=["CVE-2024-9999"],
+                location=FindingLocation(host="10.0.0.1", port=443, protocol="tcp"),
+            ),
+            _make_finding(
+                source_tool="burp",
+                source_id="b-1",
+                title="SQLi",
+                severity=Severity.CRITICAL,
+                confidence=Confidence.FIRM,
+                cve_ids=["CVE-2024-9999"],
+                location=FindingLocation(host="10.0.0.1", port=443, protocol="tcp"),
+            ),
+        ]
+        result = correlate_findings(findings)
+        data = json.loads(formatter.format(result))
+
+        finding_rels = [r for r in data["relationships"] if r["relation_type"] != "runs_on"]
+        for rel in finding_rels:
+            assert rel["confidence"] == "certain"
+
+    def test_evidence_strength_single_tool(self, formatter):
+        findings = [
+            _make_finding(
+                source_tool="nuclei",
+                source_id="n-1",
+                title="Info leak",
+                severity=Severity.LOW,
+                location=FindingLocation(host="10.0.0.1", port=80, protocol="tcp"),
+            ),
+        ]
+        result = correlate_findings(findings)
+        data = json.loads(formatter.format(result))
+
+        finding_rels = [r for r in data["relationships"] if r["relation_type"] != "runs_on"]
+        assert len(finding_rels) >= 1
+        # Single tool: 0.25, no CVE, no exploitation = 0.25
+        assert finding_rels[0]["evidence_strength"] == 0.25
+
+    def test_evidence_strength_with_cve(self, formatter):
+        findings = [
+            _make_finding(
+                source_tool="nuclei",
+                source_id="n-1",
+                title="Log4j",
+                severity=Severity.CRITICAL,
+                cve_ids=["CVE-2021-44228"],
+                location=FindingLocation(host="10.0.0.1", port=443, protocol="tcp"),
+            ),
+        ]
+        result = correlate_findings(findings)
+        data = json.loads(formatter.format(result))
+
+        finding_rels = [r for r in data["relationships"] if r["relation_type"] != "runs_on"]
+        assert len(finding_rels) >= 1
+        # Single tool (0.25) + CVE (0.2) = 0.45
+        assert finding_rels[0]["evidence_strength"] == 0.45
+
+    def test_evidence_strength_multi_tool_with_cve(self, formatter):
+        findings = [
+            _make_finding(
+                source_tool="nuclei",
+                source_id="n-1",
+                title="SQLi",
+                severity=Severity.CRITICAL,
+                cve_ids=["CVE-2024-9999"],
+                location=FindingLocation(host="10.0.0.1", port=443, protocol="tcp"),
+            ),
+            _make_finding(
+                source_tool="burp",
+                source_id="b-1",
+                title="SQLi",
+                severity=Severity.CRITICAL,
+                cve_ids=["CVE-2024-9999"],
+                location=FindingLocation(host="10.0.0.1", port=443, protocol="tcp"),
+            ),
+        ]
+        result = correlate_findings(findings)
+        data = json.loads(formatter.format(result))
+
+        finding_rels = [r for r in data["relationships"] if r["relation_type"] != "runs_on"]
+        # 2 tools (0.5) + CVE (0.2) = 0.7
+        assert finding_rels[0]["evidence_strength"] == 0.7
+
+    def test_confirmed_by_in_relationship(self, formatter):
+        from vinculum.enrichment.cross_tool import CrossToolEnricher
+        from vinculum.models.finding import CorrelationGroup
+
+        f1 = _make_finding(
+            source_tool="indago",
+            source_id="i-1",
+            title="SQLi",
+            severity=Severity.CRITICAL,
+            location=FindingLocation(
+                url="https://api.example.com/search", parameter="q",
+                host="api.example.com", port=443, protocol="tcp",
+            ),
+        )
+        f2 = _make_finding(
+            source_tool="bypassburrito",
+            source_id="bb-1",
+            title="SQLi",
+            severity=Severity.CRITICAL,
+            location=FindingLocation(
+                url="https://api.example.com/search", parameter="q",
+                host="api.example.com", port=443, protocol="tcp",
+            ),
+            raw_data={"successful_bypass": {"found": True}},
+        )
+        group = CorrelationGroup()
+        group.add_finding(f1)
+        group.add_finding(f2)
+        from vinculum.correlation.engine import CorrelationResult
+        result = CorrelationResult(groups=[group], original_count=2)
+        CrossToolEnricher().enrich(result)
+        data = json.loads(formatter.format(result))
+
+        finding_rels = [r for r in data["relationships"] if r["relation_type"] != "runs_on"]
+        assert len(finding_rels) >= 1
+        assert "confirmed_by" in finding_rels[0]
+        assert "bypassburrito" in finding_rels[0]["confirmed_by"]
+
+    def test_no_confirmed_by_when_empty(self, formatter):
+        findings = [
+            _make_finding(
+                source_tool="nuclei",
+                source_id="n-1",
+                title="Info leak",
+                severity=Severity.LOW,
+                location=FindingLocation(host="10.0.0.1", port=80, protocol="tcp"),
+            ),
+        ]
+        result = correlate_findings(findings)
+        data = json.loads(formatter.format(result))
+
+        finding_rels = [r for r in data["relationships"] if r["relation_type"] != "runs_on"]
+        assert len(finding_rels) >= 1
+        assert "confirmed_by" not in finding_rels[0]

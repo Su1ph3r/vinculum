@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-02-11
+
+### Added
+
+#### Pipeline Run Metadata
+- `--run-id` flag for tracking pipeline executions across runs
+- Run ID included in JSON, Ariadne, SARIF, and console output metadata
+
+#### Custom Parser Plugin System
+- `--parser-dir` flag for loading custom parser plugins from external directories
+- Auto-scan of `~/.vinculum/parsers/` for user-installed parsers
+- `ParserRegistry.load_plugins()` for dynamic parser discovery via `importlib`
+
+#### Ariadne Parser (Closed-Loop Feedback)
+- New `AriadneParser` for re-ingesting Vinculum's own Ariadne export (`vinculum-ariadne-export` v1.1)
+- Preserves `vinculum_metadata` (correlation_id, fingerprint, source_tools) for round-trip correlation
+- Enables iterative enrichment: Ariadne output → Vinculum re-ingestion → enhanced correlation
+
+#### Cross-Tool Enrichment
+- `CrossToolEnricher` links findings across tool boundaries within correlation groups:
+  - Indago ↔ BypassBurrito: marks `exploitation_confirmed` when WAF bypass succeeds
+  - Indago ↔ Reticustos: enriches API findings with service/version info
+  - Cepheus ↔ Nubicustos: attaches cloud resource context to container escape findings
+- Confidence boosting: automatically sets `confidence=CERTAIN` when 2+ tools confirm the same issue
+- Provenance chains: ordered tool pipeline per group (reticustos→indago→bypassburrito→nubicustos→cepheus)
+
+#### Relationship Confidence Weights in Ariadne Export
+- Each relationship now includes `confidence` (certain/firm/tentative), `evidence_strength` (0.0-1.0), and `confirmed_by` fields
+- Evidence strength factors: multi-tool (+0.25/tool, cap 0.5), CVE presence (+0.2), exploitation confirmed (+0.3)
+
+#### BypassBurrito Export Format
+- `--format burrito` exports WAF-blocked Indago findings as BypassBurrito input targets
+- Detects WAF-blocked requests by status codes (403/406/429), WAF keywords, and tags
+- Maps CWE IDs to vulnerability types (SQLi, XSS, Command Injection, etc.)
+
+#### Incremental Correlation
+- `--baseline` flag for incremental ingestion against a previous results file
+- `CorrelationResult.to_dict()` / `from_dict()` for serializing and restoring baselines
+- `CorrelationEngine.incremental_correlate()` indexes baseline groups and only processes new findings
+
+### Changed
+- CLI now registers 13 parsers (up from 12) including Ariadne
+- `UnifiedFinding` model adds `exploitation_confirmed` and `confirmed_by` fields
+- `CorrelationGroup` model adds `provenance_chain` field
+- `CorrelationResult` accepts optional `metadata` dict
+- Output config format choices now include `ariadne` and `burrito`
+- Version bumped to 0.3.0
+
 ## [0.2.0] - 2026-02-09
 
 ### Added
@@ -46,6 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML-based suppression rules
 - Configuration file support with CLI overrides
 
-[Unreleased]: https://github.com/Su1ph3r/vinculum/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Su1ph3r/vinculum/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Su1ph3r/vinculum/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Su1ph3r/vinculum/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Su1ph3r/vinculum/releases/tag/v0.1.0

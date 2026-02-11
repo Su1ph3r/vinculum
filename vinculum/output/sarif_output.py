@@ -262,16 +262,19 @@ class SARIFOutputFormatter:
 
     def _build_invocation(self, result: CorrelationResult) -> dict[str, Any]:
         """Build SARIF invocation metadata."""
+        properties: dict[str, Any] = {
+            "totalFindings": result.original_count,
+            "uniqueIssues": result.unique_count,
+            "duplicatesRemoved": result.duplicate_count,
+            "deduplicationRate": round(result.dedup_rate, 1),
+        }
+        if result.metadata.get("run_id"):
+            properties["runId"] = result.metadata["run_id"]
         return {
             "executionSuccessful": True,
             "endTimeUtc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "toolExecutionNotifications": [],
-            "properties": {
-                "totalFindings": result.original_count,
-                "uniqueIssues": result.unique_count,
-                "duplicatesRemoved": result.duplicate_count,
-                "deduplicationRate": round(result.dedup_rate, 1),
-            },
+            "properties": properties,
         }
 
     def _get_rule_id(self, finding: UnifiedFinding) -> str:

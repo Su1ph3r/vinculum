@@ -85,6 +85,10 @@ class UnifiedFinding(BaseModel):
     epss_percentile: float | None = None
     exploit_available: bool | None = None
 
+    # Cross-tool enrichment
+    exploitation_confirmed: bool = False
+    confirmed_by: list[str] = Field(default_factory=list)
+
     # Metadata
     first_seen: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     tags: list[str] = Field(default_factory=list)
@@ -116,6 +120,7 @@ class CorrelationGroup(BaseModel):
     correlation_id: str = Field(default_factory=lambda: str(uuid4()))
     findings: list[UnifiedFinding] = Field(default_factory=list)
     primary_finding: UnifiedFinding | None = None  # Representative finding
+    provenance_chain: list[dict[str, Any]] = Field(default_factory=list)
 
     @property
     def max_severity(self) -> Severity:

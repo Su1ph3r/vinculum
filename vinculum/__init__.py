@@ -1,6 +1,6 @@
 """Vinculum - Bind and correlate security findings across tools."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __title__ = "Vinculum"
 
 # Public API exports
@@ -10,6 +10,7 @@ from vinculum.correlation import (
     correlate_findings,
     generate_fingerprint,
 )
+from vinculum.enrichment.cross_tool import CrossToolEnricher
 from vinculum.models import (
     Confidence,
     CorrelationGroup,
@@ -18,7 +19,9 @@ from vinculum.models import (
     Severity,
     UnifiedFinding,
 )
+from vinculum.output.burrito_output import BurritoOutputFormatter
 from vinculum.parsers import BaseParser, ParseError, ParserRegistry
+from vinculum.parsers.ariadne import AriadneParser
 
 __all__ = [
     # Version info
@@ -35,9 +38,14 @@ __all__ = [
     "BaseParser",
     "ParseError",
     "ParserRegistry",
+    "AriadneParser",
     # Correlation
     "CorrelationEngine",
     "CorrelationResult",
     "correlate_findings",
     "generate_fingerprint",
+    # Enrichment
+    "CrossToolEnricher",
+    # Output
+    "BurritoOutputFormatter",
 ]

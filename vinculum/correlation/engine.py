@@ -1,6 +1,7 @@
 """Correlation engine for deduplicating and grouping findings."""
 
 from collections import defaultdict
+from typing import Any
 from uuid import uuid4
 
 from vinculum.correlation.fingerprint import (
@@ -110,6 +111,50 @@ class CorrelationEngine:
 
         return None
 
+    def incremental_correlate(
+        self,
+        new_findings: list[UnifiedFinding],
+        baseline: "CorrelationResult",
+    ) -> list[CorrelationGroup]:
+        """
+        Incrementally correlate new findings against a baseline result.
+
+        Pre-indexes baseline groups, then only processes new findings
+        through the matching pipeline. Already-correlated findings are
+        never re-processed.
+
+        Args:
+            new_findings: New findings to correlate
+            baseline: Previous correlation result to use as baseline
+
+        Returns:
+            Combined list of CorrelationGroup objects
+        """
+        self._reset_indices()
+
+        # Load baseline groups into indices
+        for group in baseline.groups:
+            self._groups[group.correlation_id] = group
+            for finding in group.findings:
+                self._index_finding(finding, group.correlation_id)
+
+        # Process only new findings
+        for finding in new_findings:
+            if not finding.fingerprint:
+                finding.fingerprint = generate_fingerprint(finding)
+
+            group_id = self._find_matching_group(finding)
+
+            if group_id:
+                self._groups[group_id].add_finding(finding)
+            else:
+                group = CorrelationGroup()
+                group.add_finding(finding)
+                self._groups[group.correlation_id] = group
+                self._index_finding(finding, group.correlation_id)
+
+        return list(self._groups.values())
+
     def _index_finding(self, finding: UnifiedFinding, group_id: str) -> None:
         """Add finding to all relevant indices."""
         # Source ID index
@@ -131,9 +176,15 @@ class CorrelationEngine:
 class CorrelationResult:
     """Result of correlation operation with statistics."""
 
-    def __init__(self, groups: list[CorrelationGroup], original_count: int):
+    def __init__(
+        self,
+        groups: list[CorrelationGroup],
+        original_count: int,
+        metadata: dict[str, Any] | None = None,
+    ):
         self.groups = groups
         self.original_count = original_count
+        self.metadata: dict[str, Any] = metadata or {}
 
     @property
     def unique_count(self) -> int:
@@ -178,9 +229,43 @@ class CorrelationResult:
             findings.extend(group.findings)
         return findings
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the correlation result for baseline storage."""
+        return {
+            "metadata": self.metadata,
+            "original_count": self.original_count,
+            "groups": [
+                {
+                    "correlation_id": group.correlation_id,
+                    "provenance_chain": group.provenance_chain,
+                    "findings": [f.model_dump(mode="json") for f in group.findings],
+                }
+                for group in self.groups
+            ],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "CorrelationResult":
+        """Deserialize a correlation result from a JSON dict."""
+        groups: list[CorrelationGroup] = []
+        for gdata in data.get("groups", []):
+            group = CorrelationGroup(correlation_id=gdata["correlation_id"])
+            group.provenance_chain = gdata.get("provenance_chain", [])
+            for fdata in gdata.get("findings", []):
+                finding = UnifiedFinding(**fdata)
+                group.add_finding(finding)
+            groups.append(group)
+        return cls(
+            groups=groups,
+            original_count=data.get("original_count", 0),
+            metadata=data.get("metadata", {}),
+        )
+
 
 def correlate_findings(
-    findings: list[UnifiedFinding], ai_correlator=None
+    findings: list[UnifiedFinding],
+    ai_correlator=None,
+    metadata: dict[str, Any] | None = None,
 ) -> CorrelationResult:
     """
     Convenience function to correlate findings.
@@ -188,10 +273,11 @@ def correlate_findings(
     Args:
         findings: List of findings to correlate
         ai_correlator: Optional AI correlator for semantic matching
+        metadata: Optional metadata dict (e.g. run_id) to attach to result
 
     Returns:
         CorrelationResult with groups and statistics
     """
     engine = CorrelationEngine(ai_correlator=ai_correlator)
     groups = engine.correlate(findings)
-    return CorrelationResult(groups, len(findings))
+    return CorrelationResult(groups, len(findings), metadata=metadata)

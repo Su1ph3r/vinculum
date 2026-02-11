@@ -10,15 +10,18 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn
 from vinculum import __version__
 from vinculum.config import VinculumConfig, load_config, merge_cli_with_config
 from vinculum.correlation.ai_correlator import get_ai_correlator
-from vinculum.correlation.engine import correlate_findings
+from vinculum.correlation.engine import CorrelationEngine, CorrelationResult, correlate_findings
+from vinculum.enrichment.cross_tool import CrossToolEnricher
 from vinculum.enrichment.epss import EPSSEnricher
 from vinculum.logging import setup_logging
 from vinculum.models.finding import UnifiedFinding
 from vinculum.output.ariadne_output import AriadneOutputFormatter
+from vinculum.output.burrito_output import BurritoOutputFormatter
 from vinculum.output.console_output import ConsoleOutputFormatter
 from vinculum.output.json_output import JSONOutputFormatter
 from vinculum.output.sarif_output import SARIFOutputFormatter
 from vinculum.parsers.base import ParseError, ParserRegistry
+from vinculum.parsers.ariadne import AriadneParser
 from vinculum.parsers.burp import BurpParser
 from vinculum.parsers.bypassburrito import BypassBurritoParser
 from vinculum.parsers.cepheus import CepheusParser
@@ -36,6 +39,7 @@ from vinculum.suppression import SuppressionManager
 console = Console()
 
 # Register parsers
+ParserRegistry.register(AriadneParser())
 ParserRegistry.register(BurpParser())
 ParserRegistry.register(BypassBurritoParser())
 ParserRegistry.register(CepheusParser())
@@ -70,7 +74,7 @@ def cli():
     "--format",
     "-f",
     "output_format",
-    type=click.Choice(["json", "console", "sarif", "ariadne"]),
+    type=click.Choice(["json", "console", "sarif", "ariadne", "burrito"]),
     default=None,
     help="Output format (default: console)",
 )
@@ -124,6 +128,23 @@ def cli():
     is_flag=True,
     help="Verbose output",
 )
+@click.option(
+    "--run-id",
+    default=None,
+    help="Pipeline run identifier for tracking and correlation across executions",
+)
+@click.option(
+    "--parser-dir",
+    multiple=True,
+    type=click.Path(exists=True, file_okay=False),
+    help="Directory containing custom parser plugins (can be specified multiple times)",
+)
+@click.option(
+    "--baseline",
+    type=click.Path(exists=True),
+    default=None,
+    help="Path to previous JSON results for incremental correlation",
+)
 def ingest(
     files,
     config_path,
@@ -137,6 +158,9 @@ def ingest(
     include_raw,
     log_level,
     verbose,
+    run_id,
+    parser_dir,
+    baseline,
 ):
     """
     Ingest security findings from multiple tool outputs.
@@ -144,6 +168,16 @@ def ingest(
     FILES: One or more files to ingest (Burp XML, Nessus XML, Semgrep JSON, etc.)
     """
     from vinculum.models.enums import Severity
+
+    # Load custom parser plugins
+    plugin_dirs = [Path(d) for d in parser_dir]
+    default_plugin_dir = Path.home() / ".vinculum" / "parsers"
+    if default_plugin_dir.is_dir():
+        plugin_dirs.append(default_plugin_dir)
+    if plugin_dirs:
+        loaded = ParserRegistry.load_plugins(plugin_dirs)
+        if loaded > 0 and verbose:
+            console.print(f"[dim]Loaded {loaded} custom parser plugin(s)[/dim]")
 
     # Load and merge configuration
     base_config = load_config(Path(config_path) if config_path else None)
@@ -256,13 +290,33 @@ def ingest(
         console=console,
         transient=True,
     ) as progress:
-        progress.add_task("[green]Correlating findings...", total=None)
-        result = correlate_findings(all_findings, ai_correlator=ai_correlator)
+        metadata = {}
+        if run_id:
+            metadata["run_id"] = run_id
+
+        if baseline:
+            import json as _json
+
+            progress.add_task("[green]Loading baseline and correlating incrementally...", total=None)
+            with open(baseline) as bf:
+                baseline_data = _json.load(bf)
+            baseline_result = CorrelationResult.from_dict(baseline_data)
+            engine = CorrelationEngine(ai_correlator=ai_correlator)
+            groups = engine.incremental_correlate(all_findings, baseline_result)
+            baseline_count = sum(len(g.findings) for g in baseline_result.groups)
+            result = CorrelationResult(groups, baseline_count + len(all_findings), metadata=metadata)
+        else:
+            progress.add_task("[green]Correlating findings...", total=None)
+            result = correlate_findings(all_findings, ai_correlator=ai_correlator, metadata=metadata)
 
     console.print(
         f"[green]Correlated to {result.unique_count} unique issues "
         f"({result.dedup_rate:.1f}% deduplication)[/green]"
     )
+
+    # Cross-tool enrichment (always active, no-op when no relevant combos)
+    enricher_ct = CrossToolEnricher()
+    enricher_ct.enrich(result)
 
     # Enrich with EPSS if requested
     if config.correlation.enrich_epss:
@@ -319,6 +373,15 @@ def ingest(
             formatter = AriadneOutputFormatter(pretty=True, include_raw=effective_include_raw)
             formatter.write(result, output_path)
             console.print(f"[green]Ariadne export written to {output_path}[/green]")
+    elif effective_format == "burrito":
+        if not effective_output:
+            formatter = BurritoOutputFormatter(pretty=True)
+            print(formatter.format(result))
+        else:
+            output_path = Path(effective_output)
+            formatter = BurritoOutputFormatter(pretty=True)
+            formatter.write(result, output_path)
+            console.print(f"[green]BypassBurrito export written to {output_path}[/green]")
     else:
         formatter = ConsoleOutputFormatter(console=console, verbose=verbose)
         formatter.print(result)

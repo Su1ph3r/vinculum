@@ -54,6 +54,8 @@ class ConsoleOutputFormatter:
         summary.add_column("Metric", style="bold")
         summary.add_column("Value", justify="right")
 
+        if result.metadata.get("run_id"):
+            summary.add_row("Run ID", result.metadata["run_id"])
         summary.add_row("Total Findings", str(result.original_count))
         summary.add_row("Unique Issues", str(result.unique_count))
         summary.add_row("Duplicates Removed", str(result.duplicate_count))
