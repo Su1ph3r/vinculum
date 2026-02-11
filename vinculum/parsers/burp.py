@@ -9,9 +9,12 @@ from xml.etree.ElementTree import Element
 
 import defusedxml.ElementTree as ET
 
+from vinculum.logging import get_logger
 from vinculum.models.enums import Confidence, FindingType, Severity
 from vinculum.models.finding import FindingLocation, UnifiedFinding
 from vinculum.parsers.base import BaseParser, ParseError
+
+logger = get_logger("parsers.burp")
 
 
 class BurpParser(BaseParser):
@@ -44,13 +47,36 @@ class BurpParser(BaseParser):
             tree = ET.parse(str(file_path))
             root = tree.getroot()
 
-            for issue in root.findall(".//issue"):
-                finding = self._parse_issue(issue)
-                if finding:
-                    findings.append(finding)
+            issues = root.findall(".//issue")
+            skipped = 0
+            total = len(issues)
+
+            for issue in issues:
+                try:
+                    finding = self._parse_issue(issue)
+                    if finding:
+                        findings.append(finding)
+                except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                    logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                    skipped += 1
+                    continue
+
+            if skipped > 0:
+                logger.error(
+                    "Skipped %d of %d items in %s — possible schema change or parser bug",
+                    skipped, total, file_path,
+                )
+
+            if total > 0 and skipped == total:
+                raise ParseError(
+                    f"All {total} items failed to parse — likely schema change or parser bug",
+                    file_path,
+                )
 
         except ET.ParseError as e:
             raise ParseError(f"Invalid XML: {e}", file_path)
+        except ParseError:
+            raise
         except Exception as e:
             raise ParseError(f"Failed to parse: {e}", file_path)
 

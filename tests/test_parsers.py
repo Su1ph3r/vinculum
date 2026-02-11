@@ -433,14 +433,14 @@ class TestNucleiParser:
         assert ssl.severity == Severity.INFO
 
     def test_nuclei_invalid_json_skips_bad_lines(self, tmp_path):
-        """Nuclei parser skips invalid JSON lines instead of raising errors."""
+        """Nuclei parser raises ParseError when all lines are invalid."""
         parser = NucleiParser()
         bad_file = tmp_path / "bad.json"
         bad_file.write_text("this is not json")
 
-        # Nuclei parser skips invalid lines gracefully
-        findings = parser.parse(bad_file)
-        assert len(findings) == 0
+        # All items failed — raises ParseError
+        with pytest.raises(ParseError):
+            parser.parse(bad_file)
 
 
 class TestTrivyParser:

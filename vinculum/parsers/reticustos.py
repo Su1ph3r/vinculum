@@ -48,40 +48,73 @@ class ReticustosParser(BaseParser):
 
     def parse(self, file_path: Path) -> list[UnifiedFinding]:
         """Parse Reticustos JSON export file."""
+        findings = []
+
         try:
             with open(file_path, "r") as f:
                 data = json.load(f)
+
+            if "export_metadata" not in data or "findings" not in data:
+                raise ParseError("Not a valid Reticustos export", file_path)
+
+            # Build lookup dicts for host and service context
+            hosts = {h["ip"]: h for h in data.get("hosts", [])}
+            services = {}
+            for svc in data.get("services", []):
+                key = (svc["host_ip"], svc["port"], svc.get("protocol", "tcp"))
+                services[key] = svc
+
+            skipped = 0
+            total = 0
+
+            # Parse scanner findings
+            raw_findings = data.get("findings", [])
+            ssl_analyses = data.get("ssl_analyses", [])
+
+            for raw_finding in raw_findings:
+                if raw_finding.get("status") == "false_positive":
+                    logger.debug(f"Skipping false positive: {raw_finding.get('title')}")
+                    continue
+
+                total += 1
+                try:
+                    finding = self._parse_finding(raw_finding, hosts, services)
+                    if finding:
+                        findings.append(finding)
+                except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                    logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                    skipped += 1
+                    continue
+
+            # Parse SSL analyses into findings
+            total += len(ssl_analyses)
+            for ssl_analysis in ssl_analyses:
+                try:
+                    ssl_findings = self._parse_ssl_analysis(ssl_analysis)
+                    findings.extend(ssl_findings)
+                except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                    logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                    skipped += 1
+                    continue
+
+            if skipped > 0:
+                logger.error(
+                    "Skipped %d of %d items in %s — possible schema change or parser bug",
+                    skipped, total, file_path,
+                )
+
+            if total > 0 and skipped == total:
+                raise ParseError(
+                    f"All {total} items failed to parse — likely schema change or parser bug",
+                    file_path,
+                )
+
         except json.JSONDecodeError as e:
             raise ParseError(f"Invalid JSON: {e}", file_path)
+        except ParseError:
+            raise
         except Exception as e:
-            raise ParseError(f"Failed to read file: {e}", file_path)
-
-        if "export_metadata" not in data or "findings" not in data:
-            raise ParseError("Not a valid Reticustos export", file_path)
-
-        # Build lookup dicts for host and service context
-        hosts = {h["ip"]: h for h in data.get("hosts", [])}
-        services = {}
-        for svc in data.get("services", []):
-            key = (svc["host_ip"], svc["port"], svc.get("protocol", "tcp"))
-            services[key] = svc
-
-        findings = []
-
-        # Parse scanner findings
-        for raw_finding in data.get("findings", []):
-            if raw_finding.get("status") == "false_positive":
-                logger.debug(f"Skipping false positive: {raw_finding.get('title')}")
-                continue
-
-            finding = self._parse_finding(raw_finding, hosts, services)
-            if finding:
-                findings.append(finding)
-
-        # Parse SSL analyses into findings
-        for ssl_analysis in data.get("ssl_analyses", []):
-            ssl_findings = self._parse_ssl_analysis(ssl_analysis)
-            findings.extend(ssl_findings)
+            raise ParseError(f"Failed to parse: {e}", file_path)
 
         logger.info(f"Parsed {len(findings)} findings from {file_path}")
         return findings
@@ -295,7 +328,11 @@ class ReticustosParser(BaseParser):
             "info": Severity.INFO,
             "informational": Severity.INFO,
         }
-        return mapping.get(severity_str.lower(), Severity.INFO)
+        result = mapping.get(severity_str.lower())
+        if result is None:
+            logger.warning("Unknown severity '%s', defaulting to MEDIUM", severity_str)
+            return Severity.MEDIUM
+        return result
 
     def _determine_finding_type(self, tool: str) -> FindingType:
         """Determine finding type based on the originating scanner tool."""

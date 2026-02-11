@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AriadneParser` now exported from `vinculum.parsers` module
 
 ### Changed
+- Parser error handling hardened across all 23 parsers (7 legacy parsers now match the pattern from v0.4.0):
+  - trivy, semgrep, burp, nuclei, zap, nessus, reticustos now have per-item try/except with skip counters
 - Parser error handling hardened across all 10 new parsers:
   - Failure threshold: raises `ParseError` when 100% of items fail to parse (detects schema changes)
   - Narrowed exception types from broad `Exception` to `(KeyError, TypeError, ValueError, IndexError, AttributeError)`

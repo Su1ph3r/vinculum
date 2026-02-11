@@ -47,6 +47,9 @@ class NucleiParser(BaseParser):
         line_number = 0
 
         try:
+            skipped = 0
+            total = 0
+
             with open(file_path, "r") as f:
                 for line in f:
                     line_number += 1
@@ -54,6 +57,7 @@ class NucleiParser(BaseParser):
                     if not line:
                         continue
 
+                    total += 1
                     try:
                         result = json.loads(line)
                         finding = self._parse_result(result)
@@ -61,10 +65,29 @@ class NucleiParser(BaseParser):
                             findings.append(finding)
                     except json.JSONDecodeError as e:
                         logger.warning(
-                            f"Skipping invalid JSON on line {line_number}: {e}"
+                            "Skipping invalid JSON on line %d: %s", line_number, e
                         )
+                        skipped += 1
+                        continue
+                    except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                        logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                        skipped += 1
                         continue
 
+            if skipped > 0:
+                logger.error(
+                    "Skipped %d of %d items in %s — possible schema change or parser bug",
+                    skipped, total, file_path,
+                )
+
+            if total > 0 and skipped == total:
+                raise ParseError(
+                    f"All {total} items failed to parse — likely schema change or parser bug",
+                    file_path,
+                )
+
+        except ParseError:
+            raise
         except Exception as e:
             raise ParseError(f"Failed to parse: {e}", file_path)
 
@@ -167,7 +190,11 @@ class NucleiParser(BaseParser):
             "info": Severity.INFO,
             "unknown": Severity.INFO,
         }
-        return mapping.get(severity_str.lower(), Severity.INFO)
+        result = mapping.get(severity_str.lower())
+        if result is None:
+            logger.warning("Unknown severity '%s', defaulting to MEDIUM", severity_str)
+            return Severity.MEDIUM
+        return result
 
     def _extract_cves(self, result: dict[str, Any]) -> list[str]:
         """Extract CVE IDs from Nuclei result."""

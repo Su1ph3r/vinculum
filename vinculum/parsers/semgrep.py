@@ -3,9 +3,12 @@
 import json
 from pathlib import Path
 
+from vinculum.logging import get_logger
 from vinculum.models.enums import Confidence, FindingType, Severity
 from vinculum.models.finding import FindingLocation, UnifiedFinding
 from vinculum.parsers.base import BaseParser, ParseError
+
+logger = get_logger("parsers.semgrep")
 
 
 class SemgrepParser(BaseParser):
@@ -39,13 +42,35 @@ class SemgrepParser(BaseParser):
                 data = json.load(f)
 
             results = data.get("results", [])
+            skipped = 0
+            total = len(results)
+
             for result in results:
-                finding = self._parse_result(result)
-                if finding:
-                    findings.append(finding)
+                try:
+                    finding = self._parse_result(result)
+                    if finding:
+                        findings.append(finding)
+                except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                    logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                    skipped += 1
+                    continue
+
+            if skipped > 0:
+                logger.error(
+                    "Skipped %d of %d items in %s — possible schema change or parser bug",
+                    skipped, total, file_path,
+                )
+
+            if total > 0 and skipped == total:
+                raise ParseError(
+                    f"All {total} items failed to parse — likely schema change or parser bug",
+                    file_path,
+                )
 
         except json.JSONDecodeError as e:
             raise ParseError(f"Invalid JSON: {e}", file_path)
+        except ParseError:
+            raise
         except Exception as e:
             raise ParseError(f"Failed to parse: {e}", file_path)
 
@@ -213,7 +238,11 @@ class SemgrepParser(BaseParser):
             "INFO": Severity.LOW,
             "INVENTORY": Severity.INFO,
         }
-        return mapping.get(semgrep_severity.upper(), Severity.MEDIUM)
+        result = mapping.get(semgrep_severity.upper())
+        if result is None:
+            logger.warning("Unknown severity '%s', defaulting to MEDIUM", semgrep_severity)
+            return Severity.MEDIUM
+        return result
 
     def _map_confidence(self, confidence: str) -> Confidence:
         """Map Semgrep confidence to our confidence levels."""

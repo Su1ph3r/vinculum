@@ -50,29 +50,60 @@ class TrivyParser(BaseParser):
             artifact_name = data.get("ArtifactName", "")
             artifact_type = data.get("ArtifactType", "")
 
+            skipped = 0
+            total = 0
+
             for result in data.get("Results", []):
                 target = result.get("Target", "")
                 result_class = result.get("Class", "")
                 result_type = result.get("Type", "")
 
+                vulns = result.get("Vulnerabilities", [])
+                misconfigs = result.get("Misconfigurations", [])
+                total += len(vulns) + len(misconfigs)
+
                 # Parse vulnerabilities
-                for vuln in result.get("Vulnerabilities", []):
-                    finding = self._parse_vulnerability(
-                        vuln, artifact_name, target, result_class, result_type
-                    )
-                    if finding:
-                        findings.append(finding)
+                for vuln in vulns:
+                    try:
+                        finding = self._parse_vulnerability(
+                            vuln, artifact_name, target, result_class, result_type
+                        )
+                        if finding:
+                            findings.append(finding)
+                    except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                        logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                        skipped += 1
+                        continue
 
                 # Parse misconfigurations (if present)
-                for misconfig in result.get("Misconfigurations", []):
-                    finding = self._parse_misconfiguration(
-                        misconfig, artifact_name, target
-                    )
-                    if finding:
-                        findings.append(finding)
+                for misconfig in misconfigs:
+                    try:
+                        finding = self._parse_misconfiguration(
+                            misconfig, artifact_name, target
+                        )
+                        if finding:
+                            findings.append(finding)
+                    except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                        logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                        skipped += 1
+                        continue
+
+            if skipped > 0:
+                logger.error(
+                    "Skipped %d of %d items in %s — possible schema change or parser bug",
+                    skipped, total, file_path,
+                )
+
+            if total > 0 and skipped == total:
+                raise ParseError(
+                    f"All {total} items failed to parse — likely schema change or parser bug",
+                    file_path,
+                )
 
         except json.JSONDecodeError as e:
             raise ParseError(f"Invalid JSON: {e}", file_path)
+        except ParseError:
+            raise
         except Exception as e:
             raise ParseError(f"Failed to parse: {e}", file_path)
 
@@ -244,7 +275,11 @@ class TrivyParser(BaseParser):
             "LOW": Severity.LOW,
             "UNKNOWN": Severity.INFO,
         }
-        return mapping.get(severity_str.upper(), Severity.INFO)
+        result = mapping.get(severity_str.upper())
+        if result is None:
+            logger.warning("Unknown severity '%s', defaulting to MEDIUM", severity_str)
+            return Severity.MEDIUM
+        return result
 
     def _determine_finding_type(self, result_class: str, result_type: str) -> FindingType:
         """Determine finding type based on Trivy result metadata."""

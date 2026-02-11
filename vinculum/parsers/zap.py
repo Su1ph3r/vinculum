@@ -48,20 +48,45 @@ class ZAPParser(BaseParser):
             tree = ET.parse(str(file_path))
             root = tree.getroot()
 
+            skipped = 0
+            total = 0
+
             # Iterate through sites
             for site in root.findall(".//site"):
                 site_name = site.get("name", "")
                 site_host = site.get("host", "")
                 site_port = site.get("port", "")
 
+                alerts = site.findall(".//alertitem")
+                total += len(alerts)
+
                 # Iterate through alerts
-                for alert in site.findall(".//alertitem"):
-                    finding = self._parse_alert(alert, site_name, site_host, site_port)
-                    if finding:
-                        findings.append(finding)
+                for alert in alerts:
+                    try:
+                        finding = self._parse_alert(alert, site_name, site_host, site_port)
+                        if finding:
+                            findings.append(finding)
+                    except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                        logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                        skipped += 1
+                        continue
+
+            if skipped > 0:
+                logger.error(
+                    "Skipped %d of %d items in %s — possible schema change or parser bug",
+                    skipped, total, file_path,
+                )
+
+            if total > 0 and skipped == total:
+                raise ParseError(
+                    f"All {total} items failed to parse — likely schema change or parser bug",
+                    file_path,
+                )
 
         except ET.ParseError as e:
             raise ParseError(f"Invalid XML: {e}", file_path)
+        except ParseError:
+            raise
         except Exception as e:
             raise ParseError(f"Failed to parse: {e}", file_path)
 
@@ -214,7 +239,11 @@ class ZAPParser(BaseParser):
             "2": Severity.MEDIUM,     # Medium
             "3": Severity.HIGH,       # High
         }
-        return mapping.get(risk_code, Severity.INFO)
+        result = mapping.get(risk_code)
+        if result is None:
+            logger.warning("Unknown risk code '%s', defaulting to MEDIUM", risk_code)
+            return Severity.MEDIUM
+        return result
 
     def _map_confidence(self, conf_code: str) -> Confidence:
         """Map ZAP confidence code (0-3) to confidence."""
