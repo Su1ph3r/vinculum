@@ -1,0 +1,74 @@
+{
+  "app_name": "InsecureBank",
+  "package_name": "com.example.insecurebank",
+  "version_name": "1.2.0",
+  "version_code": "12",
+  "platform": "android",
+  "min_sdk": "21",
+  "target_sdk": "33",
+  "security_score": 34,
+  "hash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+  "android": {
+    "api_level": "33"
+  },
+  "code_analysis": {
+    "hardcoded_secret": {
+      "metadata": {
+        "description": "Files may contain hardcoded sensitive information like usernames, passwords, keys, etc.",
+        "severity": "high",
+        "cwe": "CWE-798",
+        "masvs": "MSTG-STORAGE-14",
+        "ref": "https://owasp.org/www-project-mobile-top-10/"
+      },
+      "files": {
+        "com/example/insecurebank/utils/ApiClient.java": "private static final String API_KEY = \"sk-1234567890abcdef\";",
+        "com/example/insecurebank/utils/DatabaseHelper.java": "private static final String DB_PASSWORD = \"admin123\";"
+      }
+    },
+    "insecure_random": {
+      "metadata": {
+        "description": "The App uses an insecure Random Number Generator (java.util.Random) which produces a predictable sequence of numbers.",
+        "severity": "warning",
+        "cwe": "CWE-330",
+        "masvs": "MSTG-CRYPTO-6",
+        "ref": "https://owasp.org/www-project-mobile-top-10/"
+      },
+      "files": {
+        "com/example/insecurebank/crypto/TokenGenerator.java": "Random random = new Random();"
+      }
+    }
+  },
+  "manifest_analysis": [
+    {
+      "title": "Application is debuggable",
+      "description": "The android:debuggable flag is set to true in the AndroidManifest.xml. Debuggable applications can be attached to a debugger at runtime, allowing inspection of the application state and extraction of sensitive data.",
+      "severity": "high",
+      "component": "AndroidManifest.xml"
+    },
+    {
+      "title": "Application allows backup",
+      "description": "The android:allowBackup flag is set to true. This allows the application data to be backed up via adb, potentially exposing sensitive information stored locally.",
+      "severity": "warning",
+      "component": "AndroidManifest.xml"
+    }
+  ],
+  "binary_analysis": [
+    {
+      "title": "Binary makes use of insecure API(s)",
+      "description": "The binary may contain the following insecure API(s): _memcpy, _strlen. These APIs are known to have buffer overflow vulnerabilities and should be replaced with safer alternatives.",
+      "severity": "high",
+      "name": "lib/armeabi-v7a/libnative.so",
+      "cvss": 6.5
+    }
+  ],
+  "certificate_analysis": {
+    "certificate_info": "Subject: CN=Android Debug, O=Android, C=US",
+    "certificate_findings": [
+      {
+        "title": "Application is signed with a debug certificate",
+        "description": "The application is signed with a debug certificate. Debug certificates should never be used for production releases as they indicate a development build.",
+        "severity": "warning"
+      }
+    ]
+  }
+}

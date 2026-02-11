@@ -1,0 +1,99 @@
+{
+  "vulnerabilities": [
+    {
+      "id": "SNYK-JS-LODASH-1040724",
+      "title": "Remote Code Execution (RCE)",
+      "description": "lodash before 4.17.21 is vulnerable to Remote Code Execution via the template function.",
+      "severity": "critical",
+      "packageName": "lodash",
+      "version": "4.17.19",
+      "type": "vuln",
+      "identifiers": {
+        "CVE": ["CVE-2021-23337"],
+        "CWE": ["CWE-94"]
+      },
+      "cvssScore": 9.8,
+      "CVSSv3": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+      "from": ["myapp@1.0.0", "lodash@4.17.19"],
+      "fixedIn": ["4.17.21"],
+      "references": [
+        {"url": "https://nvd.nist.gov/vuln/detail/CVE-2021-23337"},
+        {"url": "https://github.com/lodash/lodash/commit/3469357cff396a26c363f8c1b5a91dde28ba4b1c"}
+      ]
+    },
+    {
+      "id": "SNYK-JS-SEQUELIZE-1320765",
+      "title": "SQL Injection",
+      "description": "Sequelize before 6.6.3 is vulnerable to SQL Injection via the replacements parameter in raw queries when user input is not properly sanitized.",
+      "severity": "high",
+      "packageName": "sequelize",
+      "version": "6.5.0",
+      "type": "vuln",
+      "identifiers": {
+        "CVE": ["CVE-2023-22578"],
+        "CWE": ["CWE-89"]
+      },
+      "cvssScore": 8.1,
+      "CVSSv3": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+      "from": ["myapp@1.0.0", "sequelize@6.5.0"],
+      "fixedIn": ["6.6.3", "7.0.0-alpha.10"],
+      "references": [
+        {"url": "https://nvd.nist.gov/vuln/detail/CVE-2023-22578"},
+        {"url": "https://github.com/sequelize/sequelize/releases/tag/v6.6.3"}
+      ]
+    },
+    {
+      "id": "SNYK-JS-MINIMIST-2429795",
+      "title": "Prototype Pollution",
+      "description": "minimist before 1.2.6 is vulnerable to Prototype Pollution via the constructor property when parsing command-line arguments.",
+      "severity": "medium",
+      "packageName": "minimist",
+      "version": "1.2.5",
+      "type": "vuln",
+      "identifiers": {
+        "CVE": ["CVE-2021-44906"],
+        "CWE": ["CWE-1321"]
+      },
+      "cvssScore": 5.6,
+      "CVSSv3": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:L",
+      "from": ["myapp@1.0.0", "mkdirp@0.5.4", "minimist@1.2.5"],
+      "fixedIn": ["1.2.6"],
+      "references": [
+        {"url": "https://nvd.nist.gov/vuln/detail/CVE-2021-44906"},
+        {"url": "https://github.com/minimistjs/minimist/commit/aeb3e27c4b3e47476f84e8b57e4b8c4a91c87af1"}
+      ]
+    },
+    {
+      "id": "SNYK-JS-BRACES-6838727",
+      "title": "Regular Expression Denial of Service (ReDoS)",
+      "description": "braces before 3.0.3 is vulnerable to Regular Expression Denial of Service due to an inefficient regex in the fill function.",
+      "severity": "low",
+      "packageName": "braces",
+      "version": "3.0.2",
+      "type": "vuln",
+      "identifiers": {
+        "CVE": ["CVE-2024-4068"],
+        "CWE": ["CWE-1333"]
+      },
+      "cvssScore": 3.7,
+      "CVSSv3": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:L",
+      "from": ["myapp@1.0.0", "micromatch@4.0.5", "braces@3.0.2"],
+      "fixedIn": ["3.0.3"],
+      "references": [
+        {"url": "https://nvd.nist.gov/vuln/detail/CVE-2024-4068"},
+        {"url": "https://github.com/micromatch/braces/issues/35"}
+      ]
+    }
+  ],
+  "ok": false,
+  "dependencyCount": 312,
+  "org": "my-org",
+  "policy": "# Snyk policy file",
+  "isPrivate": true,
+  "packageManager": "npm",
+  "projectName": "myapp",
+  "language": "js",
+  "summary": "4 vulnerable dependency paths",
+  "uniqueCount": 4,
+  "path": "/app"
+}

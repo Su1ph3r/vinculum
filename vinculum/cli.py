@@ -22,24 +22,39 @@ from vinculum.output.json_output import JSONOutputFormatter
 from vinculum.output.sarif_output import SARIFOutputFormatter
 from vinculum.parsers.base import ParseError, ParserRegistry
 from vinculum.parsers.ariadne import AriadneParser
+from vinculum.parsers.ariadne_report import AriadneReportParser
 from vinculum.parsers.burp import BurpParser
 from vinculum.parsers.bypassburrito import BypassBurritoParser
 from vinculum.parsers.cepheus import CepheusParser
+from vinculum.parsers.checkov import CheckovParser
+from vinculum.parsers.dependency_check import DependencyCheckParser
+from vinculum.parsers.grype import GrypeParser
 from vinculum.parsers.indago import IndagoParser
 from vinculum.parsers.mobilicustos import MobilicustosParser
+from vinculum.parsers.mobsf import MobSFParser
 from vinculum.parsers.nessus import NessusParser
+from vinculum.parsers.nikto import NiktoParser
+from vinculum.parsers.nmap import NmapParser
 from vinculum.parsers.nubicustos import NubicustosParser
+from vinculum.parsers.nubicustos_containers import NubicustosContainersParser
 from vinculum.parsers.nuclei import NucleiParser
 from vinculum.parsers.reticustos import ReticustosParser
+from vinculum.parsers.reticustos_endpoints import ReticustosEndpointsParser
 from vinculum.parsers.semgrep import SemgrepParser
+from vinculum.parsers.snyk import SnykParser
 from vinculum.parsers.trivy import TrivyParser
 from vinculum.parsers.zap import ZAPParser
 from vinculum.suppression import SuppressionManager
 
 console = Console()
 
-# Register parsers
+# Register parsers — order matters!
+# Ecosystem parsers with specific format-key detection go first
 ParserRegistry.register(AriadneParser())
+ParserRegistry.register(AriadneReportParser())
+ParserRegistry.register(ReticustosEndpointsParser())
+ParserRegistry.register(NubicustosContainersParser())
+# Existing parsers with specific detection
 ParserRegistry.register(BurpParser())
 ParserRegistry.register(BypassBurritoParser())
 ParserRegistry.register(CepheusParser())
@@ -49,6 +64,15 @@ ParserRegistry.register(NessusParser())
 ParserRegistry.register(NubicustosParser())
 ParserRegistry.register(NucleiParser())
 ParserRegistry.register(ReticustosParser())
+# New third-party parsers with specific detection
+ParserRegistry.register(GrypeParser())
+ParserRegistry.register(SnykParser())
+ParserRegistry.register(DependencyCheckParser())
+ParserRegistry.register(CheckovParser())
+ParserRegistry.register(MobSFParser())
+ParserRegistry.register(NiktoParser())
+ParserRegistry.register(NmapParser())
+# Broad-match parsers LAST
 ParserRegistry.register(SemgrepParser())
 ParserRegistry.register(TrivyParser())
 ParserRegistry.register(ZAPParser())

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<nmaprun scanner="nmap" args="nmap -sV -sC -oX nmap_sample.xml 192.168.1.100" start="1718452800" startstr="Sat Jun 15 12:00:00 2025" version="7.94" xmloutputversion="1.05">
+    <host starttime="1718452800" endtime="1718452860">
+        <status state="up" reason="syn-ack"/>
+        <address addr="192.168.1.100" addrtype="ipv4"/>
+        <hostnames>
+            <hostname name="web01.example.com" type="PTR"/>
+        </hostnames>
+        <ports>
+            <port protocol="tcp" portid="22">
+                <state state="open" reason="syn-ack"/>
+                <service name="ssh" product="OpenSSH" version="8.9p1" extrainfo="Ubuntu Linux"/>
+            </port>
+            <port protocol="tcp" portid="80">
+                <state state="open" reason="syn-ack"/>
+                <service name="http" product="nginx" version="1.18.0"/>
+                <script id="http-server-header" output="nginx/1.18.0"/>
+            </port>
+            <port protocol="tcp" portid="443">
+                <state state="open" reason="syn-ack"/>
+                <service name="https" product="nginx" version="1.18.0" tunnel="ssl"/>
+                <script id="ssl-heartbleed" output="VULNERABLE: The Heartbleed Bug (CVE-2014-0160)\nState: VULNERABLE\nRisk factor: High\nOpenSSL versions 1.0.1 through 1.0.1f are vulnerable."/>
+                <script id="http-csrf" output="Found 2 CSRF vulnerabilities."/>
+            </port>
+            <port protocol="tcp" portid="3306">
+                <state state="open" reason="syn-ack"/>
+                <service name="mysql" product="MySQL" version="8.0.32"/>
+                <script id="mysql-vuln-cve2012-2122" output="NOT VULNERABLE"/>
+            </port>
+        </ports>
+    </host>
+</nmaprun>

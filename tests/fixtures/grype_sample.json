@@ -1,0 +1,223 @@
+{
+  "matches": [
+    {
+      "vulnerability": {
+        "id": "CVE-2023-44487",
+        "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2023-44487",
+        "severity": "Critical",
+        "description": "The HTTP/2 protocol allows a denial of service (server resource consumption) because request cancellation can reset many streams quickly, as exploited in the wild in August through October 2023.",
+        "urls": [
+          "https://nvd.nist.gov/vuln/detail/CVE-2023-44487",
+          "https://github.com/advisories/GHSA-qppj-fm5r-hxr3"
+        ],
+        "cvss": [
+          {
+            "source": "nvd@nist.gov",
+            "type": "Primary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+            "metrics": {
+              "baseScore": 7.5,
+              "exploitabilityScore": 3.9,
+              "impactScore": 3.6
+            }
+          }
+        ],
+        "fix": {
+          "versions": ["1.52.0"],
+          "state": "fixed"
+        },
+        "advisories": []
+      },
+      "relatedVulnerabilities": [],
+      "matchDetails": [
+        {
+          "type": "exact-direct-match",
+          "matcher": "dpkg-matcher"
+        }
+      ],
+      "artifact": {
+        "id": "a1b2c3d4",
+        "name": "libnghttp2-14",
+        "version": "1.43.0-1",
+        "type": "deb",
+        "language": "",
+        "licenses": ["MIT"],
+        "cpes": ["cpe:2.3:a:nghttp2:nghttp2:1.43.0:*:*:*:*:*:*:*"],
+        "purl": "pkg:deb/debian/libnghttp2-14@1.43.0-1?arch=amd64",
+        "locations": [
+          {
+            "path": "/usr/lib/x86_64-linux-gnu/libnghttp2.so.14.20.1",
+            "layerID": "sha256:abc123"
+          }
+        ]
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2023-32681",
+        "dataSource": "https://github.com/advisories/GHSA-j8r2-6x86-q33q",
+        "severity": "High",
+        "description": "Requests is a HTTP library. Since Requests 2.3.0, Requests has been leaking Proxy-Authorization headers to destination servers when redirected to an HTTPS endpoint.",
+        "urls": [
+          "https://nvd.nist.gov/vuln/detail/CVE-2023-32681",
+          "https://github.com/psf/requests/security/advisories/GHSA-j8r2-6x86-q33q"
+        ],
+        "cvss": [
+          {
+            "source": "nvd@nist.gov",
+            "type": "Primary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:H/I:N/A:N",
+            "metrics": {
+              "baseScore": 6.1,
+              "exploitabilityScore": 1.6,
+              "impactScore": 4.0
+            }
+          }
+        ],
+        "fix": {
+          "versions": ["2.31.0"],
+          "state": "fixed"
+        },
+        "advisories": []
+      },
+      "relatedVulnerabilities": [],
+      "matchDetails": [
+        {
+          "type": "exact-direct-match",
+          "matcher": "python-matcher"
+        }
+      ],
+      "artifact": {
+        "id": "e5f6g7h8",
+        "name": "requests",
+        "version": "2.28.0",
+        "type": "python",
+        "language": "python",
+        "licenses": ["Apache-2.0"],
+        "cpes": ["cpe:2.3:a:python-requests:requests:2.28.0:*:*:*:*:*:*:*"],
+        "purl": "pkg:pypi/requests@2.28.0",
+        "locations": [
+          {
+            "path": "/usr/lib/python3/dist-packages/requests",
+            "layerID": "sha256:def456"
+          }
+        ]
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2022-42969",
+        "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2022-42969",
+        "severity": "Medium",
+        "description": "The py library through 1.11.0 for Python allows remote attackers to conduct a ReDoS attack via a Subversion repository with crafted info data.",
+        "urls": [
+          "https://nvd.nist.gov/vuln/detail/CVE-2022-42969",
+          "https://github.com/pytest-dev/py/issues/287"
+        ],
+        "cvss": [
+          {
+            "source": "nvd@nist.gov",
+            "type": "Primary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+            "metrics": {
+              "baseScore": 5.3,
+              "exploitabilityScore": 3.9,
+              "impactScore": 1.4
+            }
+          }
+        ],
+        "fix": {
+          "versions": [],
+          "state": "not-fixed"
+        },
+        "advisories": []
+      },
+      "relatedVulnerabilities": [],
+      "matchDetails": [
+        {
+          "type": "exact-direct-match",
+          "matcher": "python-matcher"
+        }
+      ],
+      "artifact": {
+        "id": "i9j0k1l2",
+        "name": "py",
+        "version": "1.11.0",
+        "type": "python",
+        "language": "python",
+        "licenses": ["MIT"],
+        "cpes": ["cpe:2.3:a:pytest-dev:py:1.11.0:*:*:*:*:*:*:*"],
+        "purl": "pkg:pypi/py@1.11.0",
+        "locations": [
+          {
+            "path": "/usr/lib/python3/dist-packages/py",
+            "layerID": "sha256:ghi789"
+          }
+        ]
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2011-3374",
+        "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2011-3374",
+        "severity": "Negligible",
+        "description": "It was found that apt-key in apt, all versions, do not correctly validate gpg keys with the master keyring, leading to a potential man-in-the-middle attack.",
+        "urls": [
+          "https://nvd.nist.gov/vuln/detail/CVE-2011-3374",
+          "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=642480"
+        ],
+        "cvss": [],
+        "fix": {
+          "versions": [],
+          "state": "not-fixed"
+        },
+        "advisories": []
+      },
+      "relatedVulnerabilities": [],
+      "matchDetails": [
+        {
+          "type": "exact-direct-match",
+          "matcher": "dpkg-matcher"
+        }
+      ],
+      "artifact": {
+        "id": "m3n4o5p6",
+        "name": "apt",
+        "version": "2.2.4",
+        "type": "deb",
+        "language": "",
+        "licenses": ["GPL-2.0"],
+        "cpes": ["cpe:2.3:a:debian:apt:2.2.4:*:*:*:*:*:*:*"],
+        "purl": "pkg:deb/debian/apt@2.2.4?arch=amd64",
+        "locations": [
+          {
+            "path": "/usr/bin/apt",
+            "layerID": "sha256:jkl012"
+          }
+        ]
+      }
+    }
+  ],
+  "source": {
+    "type": "image",
+    "target": {
+      "userInput": "myapp:latest",
+      "imageID": "sha256:abc123def456",
+      "manifestDigest": "sha256:789ghi012jkl",
+      "tags": ["myapp:latest"]
+    }
+  },
+  "distro": {
+    "name": "debian",
+    "version": "11.6",
+    "idLike": ["debian"]
+  },
+  "descriptor": {
+    "name": "grype",
+    "version": "0.74.0",
+    "configuration": {}
+  }
+}

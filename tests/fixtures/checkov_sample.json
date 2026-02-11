@@ -1,0 +1,108 @@
+[
+  {
+    "check_type": "terraform",
+    "results": {
+      "passed_checks": [
+        {
+          "check_id": "CKV_AWS_18",
+          "name": "Ensure the S3 bucket has access logging enabled",
+          "check_result": {
+            "result": "PASSED"
+          },
+          "file_path": "/main.tf",
+          "file_line_range": [1, 15],
+          "resource": "aws_s3_bucket.logs",
+          "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/aws-policies/s3-policies/s3-13-enable-logging"
+        }
+      ],
+      "failed_checks": [
+        {
+          "check_id": "CKV_AWS_19",
+          "name": "Ensure the S3 bucket has server-side encryption enabled",
+          "check_result": {
+            "result": "FAILED"
+          },
+          "file_path": "/main.tf",
+          "file_line_range": [17, 30],
+          "resource": "aws_s3_bucket.data",
+          "severity": "high",
+          "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/aws-policies/s3-policies/s3-14-data-encrypted-at-rest",
+          "bc_check_id": "CWE-311"
+        },
+        {
+          "check_id": "CKV_AWS_145",
+          "name": "Ensure S3 bucket is encrypted with KMS",
+          "check_result": {
+            "result": "FAILED"
+          },
+          "file_path": "/main.tf",
+          "file_line_range": [17, 30],
+          "resource": "aws_s3_bucket.data",
+          "severity": "medium",
+          "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/aws-policies/s3-policies/ensure-that-s3-bucket-uses-a-kms-managed-key"
+        }
+      ]
+    }
+  },
+  {
+    "check_type": "dockerfile",
+    "results": {
+      "passed_checks": [
+        {
+          "check_id": "CKV_DOCKER_3",
+          "name": "Ensure that a user for the container has been created",
+          "check_result": {
+            "result": "PASSED"
+          },
+          "file_path": "/Dockerfile.prod",
+          "file_line_range": [1, 22],
+          "resource": "/Dockerfile.prod."
+        }
+      ],
+      "failed_checks": [
+        {
+          "check_id": "CKV_DOCKER_2",
+          "name": "Ensure that HEALTHCHECK instructions have been added to container images",
+          "check_result": {
+            "result": "FAILED"
+          },
+          "file_path": "/Dockerfile",
+          "file_line_range": [1, 18],
+          "resource": "/Dockerfile.",
+          "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/docker-policies/docker-policy-index/ensure-that-healthcheck-instructions-have-been-added-to-container-images"
+        }
+      ]
+    }
+  },
+  {
+    "check_type": "kubernetes",
+    "results": {
+      "passed_checks": [
+        {
+          "check_id": "CKV_K8S_21",
+          "name": "Ensure the default namespace is not used",
+          "check_result": {
+            "result": "PASSED"
+          },
+          "file_path": "/k8s/deployment.yaml",
+          "file_line_range": [1, 45],
+          "resource": "Deployment.default.myapp"
+        }
+      ],
+      "failed_checks": [
+        {
+          "check_id": "CKV_K8S_16",
+          "name": "Ensure that privileged containers are not used",
+          "check_result": {
+            "result": "FAILED"
+          },
+          "file_path": "/k8s/deployment.yaml",
+          "file_line_range": [25, 40],
+          "resource": "Deployment.default.myapp",
+          "severity": "critical",
+          "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-16"
+        }
+      ]
+    }
+  }
+]

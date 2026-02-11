@@ -1,6 +1,6 @@
 """Vinculum - Bind and correlate security findings across tools."""
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __title__ = "Vinculum"
 
 # Public API exports

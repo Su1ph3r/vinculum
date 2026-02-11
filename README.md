@@ -6,7 +6,7 @@
 
 ## Features
 
-- **Multi-Tool Ingestion**: Parse findings from 13 security tools including Burp Suite, Nessus, Semgrep, Nuclei, Trivy, OWASP ZAP, Reticustos, Nubicustos, Indago, Mobilicustos, Cepheus, BypassBurrito, and Ariadne (closed-loop)
+- **Multi-Tool Ingestion**: Parse findings from 23 security tools including Burp Suite, Nessus, Semgrep, Nuclei, Trivy, OWASP ZAP, Reticustos, Nubicustos, Indago, Mobilicustos, Cepheus, BypassBurrito, Ariadne, Snyk, Grype, Checkov, MobSF, OWASP Dependency-Check, Nikto, and Nmap
 - **Intelligent Correlation**: Deduplicate findings across tools using fingerprint-based and semantic matching
 - **Cross-Tool Enrichment**: Automatic linking of findings across tool boundaries with confidence boosting and provenance chains
 - **Incremental Correlation**: Re-correlate against a baseline to process only new findings (`--baseline`)
@@ -113,20 +113,37 @@ vinculum ingest scan_results/* --config vinculum.yaml
 
 ## Supported Tools
 
+### Ecosystem Tools
+
 | Tool | Format | Extension | Finding Type |
 |------|--------|-----------|--------------|
-| Ariadne | JSON | `.json` | Closed-loop re-ingestion |
-| Burp Suite | XML | `.xml` | DAST |
+| Ariadne (export) | JSON | `.json` | Closed-loop re-ingestion |
+| Ariadne (report) | JSON | `.json` | Attack path analysis |
 | BypassBurrito | JSON | `.json` | WAF Bypass |
 | Cepheus | JSON | `.json` | Container Escape |
 | Indago | JSON | `.json` | API/DAST |
 | Mobilicustos | JSON | `.json` | Mobile |
+| Nubicustos (findings) | JSON | `.json` | Cloud (AWS/Azure/GCP/K8s) |
+| Nubicustos (containers) | JSON | `.json` | Container inventory |
+| Reticustos (findings) | JSON | `.json` | Network/DAST/SSL |
+| Reticustos (endpoints) | JSON | `.json` | Endpoint inventory |
+
+### Third-Party Tools
+
+| Tool | Format | Extension | Finding Type |
+|------|--------|-----------|--------------|
+| Burp Suite | XML | `.xml` | DAST |
+| Checkov | JSON | `.json` | Cloud/Container/IaC |
+| Grype | JSON | `.json` | Container/Dependency |
+| MobSF | JSON | `.json` | Mobile SAST |
 | Nessus | XML | `.nessus` | Network |
-| Nubicustos | JSON | `.json` | Cloud (AWS/Azure/GCP/K8s) |
+| Nikto | XML | `.xml` | DAST |
+| Nmap | XML | `.xml` | Network |
 | Nuclei | JSONL | `.json`, `.jsonl` | DAST |
+| OWASP Dependency-Check | XML/JSON | `.xml`, `.json` | Dependency |
 | OWASP ZAP | XML | `.xml` | DAST |
-| Reticustos | JSON | `.json` | Network/DAST/SSL |
 | Semgrep | JSON | `.json` | SAST |
+| Snyk | JSON | `.json` | Dependency/SAST |
 | Trivy | JSON | `.json` | Container/Dependency |
 
 ## CLI Reference
@@ -324,20 +341,30 @@ vinculum/
 │   ├── finding.py      # UnifiedFinding, FindingLocation, CorrelationGroup
 │   └── enums.py        # Severity, Confidence, FindingType
 ├── parsers/
-│   ├── base.py         # BaseParser, ParserRegistry, plugin loading
-│   ├── ariadne.py      # Ariadne closed-loop parser
-│   ├── burp.py         # Burp Suite XML parser
-│   ├── bypassburrito.py # BypassBurrito WAF bypass parser
-│   ├── cepheus.py      # Cepheus container escape parser
-│   ├── indago.py       # Indago API fuzzer parser
-│   ├── mobilicustos.py # Mobilicustos mobile parser
-│   ├── nessus.py       # Nessus XML parser
-│   ├── nubicustos.py   # Nubicustos cloud parser
-│   ├── nuclei.py       # Nuclei JSONL parser
-│   ├── reticustos.py   # Reticustos JSON parser
-│   ├── semgrep.py      # Semgrep JSON parser
-│   ├── trivy.py        # Trivy JSON parser
-│   └── zap.py          # OWASP ZAP XML parser
+│   ├── base.py                # BaseParser, ParserRegistry, plugin loading
+│   ├── ariadne.py             # Ariadne closed-loop parser
+│   ├── ariadne_report.py      # Ariadne attack path report parser
+│   ├── burp.py                # Burp Suite XML parser
+│   ├── bypassburrito.py       # BypassBurrito WAF bypass parser
+│   ├── cepheus.py             # Cepheus container escape parser
+│   ├── checkov.py             # Checkov IaC scanner parser
+│   ├── dependency_check.py    # OWASP Dependency-Check XML/JSON parser
+│   ├── grype.py               # Grype container/dependency parser
+│   ├── indago.py              # Indago API fuzzer parser
+│   ├── mobilicustos.py        # Mobilicustos mobile parser
+│   ├── mobsf.py               # MobSF mobile security parser
+│   ├── nessus.py              # Nessus XML parser
+│   ├── nikto.py               # Nikto web scanner XML parser
+│   ├── nmap.py                # Nmap XML parser
+│   ├── nubicustos.py          # Nubicustos cloud parser
+│   ├── nubicustos_containers.py # Nubicustos container inventory parser
+│   ├── nuclei.py              # Nuclei JSONL parser
+│   ├── reticustos.py          # Reticustos JSON parser
+│   ├── reticustos_endpoints.py # Reticustos endpoint inventory parser
+│   ├── semgrep.py             # Semgrep JSON parser
+│   ├── snyk.py                # Snyk SCA/SAST parser
+│   ├── trivy.py               # Trivy JSON parser
+│   └── zap.py                 # OWASP ZAP XML parser
 ├── correlation/
 │   ├── engine.py       # Correlation engine (full + incremental)
 │   ├── fingerprint.py  # Fingerprint generation
@@ -367,7 +394,7 @@ All tools ──findings──> Vinculum (correlation) ──export──> Ariad
 
 ### Importing Findings
 
-Vinculum ingests findings from all 13 supported tools. Each parser auto-detects its format:
+Vinculum ingests findings from all 23 supported tools. Each parser auto-detects its format:
 
 ```bash
 # Ingest from any combination of tools

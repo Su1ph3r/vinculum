@@ -1,0 +1,30 @@
+<?xml version="1.0" ?>
+<!DOCTYPE niktoscan SYSTEM "docs/nikto.dtd">
+<niktoscan hoession="Test" options="-h example.com -p 443 -ssl -o nikto_sample.xml -Format xml">
+    <scandetails targetip="93.184.216.34" targethostname="example.com" targetport="443" targetbanner="nginx/1.18.0" starttime="2025-06-15 12:00:00" sitename="https://example.com:443" siteip="https://93.184.216.34:443">
+        <item id="999100" osvdbid="0" osvdblink="" method="GET">
+            <description>The X-Frame-Options header is not set. This could allow clickjacking attacks.</description>
+            <uri>/</uri>
+            <namelink>https://example.com:443/</namelink>
+            <iplink>https://93.184.216.34:443/</iplink>
+        </item>
+        <item id="999200" osvdbid="3092" osvdblink="http://osvdb.org/3092" method="GET">
+            <description>/admin/: This might be interesting. Directory indexing found.</description>
+            <uri>/admin/</uri>
+            <namelink>https://example.com:443/admin/</namelink>
+            <iplink>https://93.184.216.34:443/admin/</iplink>
+        </item>
+        <item id="999300" osvdbid="0" osvdblink="" method="GET">
+            <description>Server leaks version information via Server HTTP header: nginx/1.18.0</description>
+            <uri>/</uri>
+            <namelink>https://example.com:443/</namelink>
+            <iplink>https://93.184.216.34:443/</iplink>
+        </item>
+        <item id="999400" osvdbid="5034" osvdblink="http://osvdb.org/5034" method="GET">
+            <description>/backup.sql: Potential SQL file found. May contain database dump with sensitive data.</description>
+            <uri>/backup.sql</uri>
+            <namelink>https://example.com:443/backup.sql</namelink>
+            <iplink>https://93.184.216.34:443/backup.sql</iplink>
+        </item>
+    </scandetails>
+</niktoscan>

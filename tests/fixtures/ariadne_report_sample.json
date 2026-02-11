@@ -1,0 +1,103 @@
+{
+  "format": "ariadne-report",
+  "version": "1.0",
+  "generated_at": "2025-06-15T10:00:00Z",
+  "target": "corp.example.com",
+  "attack_paths": [
+    {
+      "id": "path-001",
+      "title": "External to Database via SQL Injection",
+      "description": "Attacker can reach the internal database through a SQL injection in the public API.",
+      "severity": "critical",
+      "confidence": "high",
+      "nodes": [
+        {
+          "id": "node-001",
+          "type": "entry_point",
+          "label": "Public API Endpoint",
+          "host": "api.corp.example.com",
+          "port": 443,
+          "severity": "info"
+        },
+        {
+          "id": "node-002",
+          "type": "vulnerability",
+          "label": "SQL Injection in /api/users/search",
+          "host": "api.corp.example.com",
+          "port": 443,
+          "severity": "critical",
+          "cve_ids": ["CVE-2024-1234"],
+          "cwe_ids": ["CWE-89"]
+        },
+        {
+          "id": "node-003",
+          "type": "asset",
+          "label": "Internal PostgreSQL Database",
+          "host": "db.internal.corp.example.com",
+          "port": 5432,
+          "severity": "info"
+        }
+      ],
+      "edges": [
+        {"from": "node-001", "to": "node-002", "label": "exploits"},
+        {"from": "node-002", "to": "node-003", "label": "connects_to"}
+      ],
+      "mitre_techniques": ["T1190", "T1078"],
+      "playbook": "1. Exploit SQLi at /api/users/search\n2. Extract database credentials\n3. Connect to internal PostgreSQL"
+    },
+    {
+      "id": "path-002",
+      "title": "Container Escape via Privileged Pod",
+      "description": "Privileged container can escape to the host node and access other workloads.",
+      "severity": "high",
+      "confidence": "firm",
+      "nodes": [
+        {
+          "id": "node-004",
+          "type": "container",
+          "label": "Privileged Monitoring Agent",
+          "host": "10.0.1.10",
+          "port": null,
+          "severity": "high",
+          "cve_ids": [],
+          "cwe_ids": ["CWE-250"]
+        },
+        {
+          "id": "node-005",
+          "type": "host",
+          "label": "Kubernetes Node node-01",
+          "host": "10.0.1.10",
+          "port": null,
+          "severity": "info"
+        }
+      ],
+      "edges": [
+        {"from": "node-004", "to": "node-005", "label": "escapes_to"}
+      ],
+      "mitre_techniques": ["T1611"],
+      "playbook": "1. Gain shell in privileged container\n2. Use nsenter to escape to host"
+    },
+    {
+      "id": "path-003",
+      "title": "Lateral Movement via Exposed Redis",
+      "description": "Unauthenticated Redis instance allows data exfiltration.",
+      "severity": "medium",
+      "confidence": "tentative",
+      "nodes": [
+        {
+          "id": "node-006",
+          "type": "service",
+          "label": "Redis Cache (No Auth)",
+          "host": "10.0.1.11",
+          "port": 6379,
+          "severity": "medium",
+          "cve_ids": [],
+          "cwe_ids": ["CWE-306"]
+        }
+      ],
+      "edges": [],
+      "mitre_techniques": ["T1021"],
+      "playbook": "1. Connect to Redis on port 6379\n2. Dump cached session tokens"
+    }
+  ]
+}

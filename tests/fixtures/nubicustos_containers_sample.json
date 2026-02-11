@@ -1,0 +1,51 @@
+{
+  "format": "nubicustos-containers",
+  "version": "1.0",
+  "scan_id": "scan-ct-001",
+  "generated_at": "2025-06-15T09:00:00Z",
+  "cluster": "prod-k8s-01",
+  "containers": [
+    {
+      "id": "ct-001",
+      "name": "api-server",
+      "image": "acme/api-server:v2.3.1",
+      "image_id": "sha256:abc123def456",
+      "host_ip": "10.0.1.10",
+      "node": "node-01",
+      "namespace": "production",
+      "runtime": "containerd",
+      "privileged": false,
+      "ports": [{"container_port": 8080, "host_port": 8080, "protocol": "TCP"}],
+      "status": "running",
+      "labels": {"app": "api-server", "version": "v2.3.1"}
+    },
+    {
+      "id": "ct-002",
+      "name": "redis-cache",
+      "image": "redis:7.2-alpine",
+      "image_id": "sha256:fed789abc012",
+      "host_ip": "10.0.1.11",
+      "node": "node-02",
+      "namespace": "production",
+      "runtime": "containerd",
+      "privileged": false,
+      "ports": [{"container_port": 6379, "host_port": null, "protocol": "TCP"}],
+      "status": "running",
+      "labels": {"app": "redis"}
+    },
+    {
+      "id": "ct-003",
+      "name": "monitoring-agent",
+      "image": "datadog/agent:7.45.0",
+      "image_id": "sha256:xyz789def321",
+      "host_ip": "10.0.1.10",
+      "node": "node-01",
+      "namespace": "monitoring",
+      "runtime": "containerd",
+      "privileged": true,
+      "ports": [{"container_port": 8125, "host_port": 8125, "protocol": "UDP"}],
+      "status": "running",
+      "labels": {"app": "datadog-agent"}
+    }
+  ]
+}

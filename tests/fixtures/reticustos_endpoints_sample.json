@@ -1,0 +1,61 @@
+{
+  "format": "reticustos-endpoints",
+  "version": "1.0",
+  "scan_id": "scan-ep-001",
+  "generated_at": "2025-06-15T08:00:00Z",
+  "target": "api.example.com",
+  "endpoints": [
+    {
+      "id": "ep-001",
+      "url": "https://api.example.com/api/v1/users",
+      "method": "GET",
+      "host": "api.example.com",
+      "port": 443,
+      "protocol": "https",
+      "status_code": 200,
+      "content_type": "application/json",
+      "discovered_by": "crawl",
+      "parameters": ["page", "limit"],
+      "authenticated": false
+    },
+    {
+      "id": "ep-002",
+      "url": "https://api.example.com/api/v1/users",
+      "method": "POST",
+      "host": "api.example.com",
+      "port": 443,
+      "protocol": "https",
+      "status_code": 201,
+      "content_type": "application/json",
+      "discovered_by": "openapi",
+      "parameters": [],
+      "authenticated": true
+    },
+    {
+      "id": "ep-003",
+      "url": "https://api.example.com/api/v1/login",
+      "method": "POST",
+      "host": "api.example.com",
+      "port": 443,
+      "protocol": "https",
+      "status_code": 200,
+      "content_type": "application/json",
+      "discovered_by": "crawl",
+      "parameters": [],
+      "authenticated": false
+    },
+    {
+      "id": "ep-004",
+      "url": "http://internal.example.com:8080/admin/config",
+      "method": "GET",
+      "host": "internal.example.com",
+      "port": 8080,
+      "protocol": "http",
+      "status_code": 200,
+      "content_type": "text/html",
+      "discovered_by": "brute",
+      "parameters": [],
+      "authenticated": true
+    }
+  ]
+}
