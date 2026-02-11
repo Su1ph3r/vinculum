@@ -1,6 +1,7 @@
 """Parsers for various security tool output formats."""
 
 from vinculum.parsers.base import BaseParser, ParseError, ParserRegistry
+from vinculum.parsers.ariadne import AriadneParser
 from vinculum.parsers.ariadne_report import AriadneReportParser
 from vinculum.parsers.burp import BurpParser
 from vinculum.parsers.bypassburrito import BypassBurritoParser
@@ -28,6 +29,7 @@ __all__ = [
     "BaseParser",
     "ParseError",
     "ParserRegistry",
+    "AriadneParser",
     "AriadneReportParser",
     "BurpParser",
     "BypassBurritoParser",

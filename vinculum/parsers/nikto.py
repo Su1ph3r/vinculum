@@ -76,13 +76,19 @@ class NiktoParser(BaseParser):
             tree = ET.parse(str(file_path))
             root = tree.getroot()
 
+            skipped = 0
+            total = 0
+
             for scan_details in root.findall(".//scandetails"):
                 target_ip = scan_details.get("targetip", "")
                 target_hostname = scan_details.get("targethostname", "")
                 target_port = scan_details.get("targetport", "")
                 target_banner = scan_details.get("targetbanner", "")
 
-                for item in scan_details.findall("item"):
+                items = scan_details.findall("item")
+                total += len(items)
+
+                for item in items:
                     try:
                         finding = self._parse_item(
                             item,
@@ -93,12 +99,22 @@ class NiktoParser(BaseParser):
                         )
                         if finding:
                             findings.append(finding)
-                    except Exception as e:
-                        item_id = item.get("id", "unknown")
-                        logger.warning(
-                            "Skipping malformed Nikto item %s: %s", item_id, e
-                        )
+                    except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                        logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                        skipped += 1
                         continue
+
+            if skipped > 0:
+                logger.error(
+                    "Skipped %d of %d items in %s — possible schema change or parser bug",
+                    skipped, total, file_path,
+                )
+
+            if total > 0 and skipped == total:
+                raise ParseError(
+                    f"All {total} items failed to parse — likely schema change or parser bug",
+                    file_path,
+                )
 
         except ET.ParseError as e:
             raise ParseError(f"Invalid XML: {e}", file_path)

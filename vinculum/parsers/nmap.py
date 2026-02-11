@@ -53,63 +53,85 @@ class NmapParser(BaseParser):
             tree = ET.parse(str(file_path))
             root = tree.getroot()
 
-            for host in root.findall(".//host"):
-                host_addr = self._get_host_address(host)
-                hostnames = self._get_hostnames(host)
+            hosts = root.findall(".//host")
+            skipped = 0
+            total = len(hosts)
 
-                # Process ports
-                for port in host.findall(".//port"):
-                    state_elem = port.find("state")
-                    if state_elem is None:
-                        continue
-                    port_state = state_elem.get("state", "")
-                    if port_state != "open":
-                        continue
+            for host in hosts:
+                try:
+                    host_addr = self._get_host_address(host)
+                    hostnames = self._get_hostnames(host)
 
-                    protocol = port.get("protocol", "tcp")
-                    port_id = port.get("portid", "0")
+                    # Process ports
+                    for port in host.findall(".//port"):
+                        state_elem = port.find("state")
+                        if state_elem is None:
+                            continue
+                        port_state = state_elem.get("state", "")
+                        if port_state != "open":
+                            continue
 
-                    # Extract service info
-                    service_elem = port.find("service")
-                    service_name = ""
-                    service_product = ""
-                    service_version = ""
-                    if service_elem is not None:
-                        service_name = service_elem.get("name", "")
-                        service_product = service_elem.get("product", "")
-                        service_version = service_elem.get("version", "")
+                        protocol = port.get("protocol", "tcp")
+                        port_id = port.get("portid", "0")
 
-                    service_info = service_product
-                    if service_version:
-                        service_info = f"{service_product} {service_version}".strip()
+                        # Extract service info
+                        service_elem = port.find("service")
+                        service_name = ""
+                        service_product = ""
+                        service_version = ""
+                        if service_elem is not None:
+                            service_name = service_elem.get("name", "")
+                            service_product = service_elem.get("product", "")
+                            service_version = service_elem.get("version", "")
 
-                    # Create open port finding
-                    port_finding = self._create_port_finding(
-                        host_addr,
-                        hostnames,
-                        port_id,
-                        protocol,
-                        service_name,
-                        service_info,
-                    )
-                    findings.append(port_finding)
+                        service_info = service_product
+                        if service_version:
+                            service_info = f"{service_product} {service_version}".strip()
 
-                    # Process NSE scripts on this port
-                    for script in port.findall("script"):
-                        script_finding = self._parse_script(
-                            script, host_addr, hostnames, port_id, protocol, service_name
+                        # Create open port finding
+                        port_finding = self._create_port_finding(
+                            host_addr,
+                            hostnames,
+                            port_id,
+                            protocol,
+                            service_name,
+                            service_info,
                         )
-                        if script_finding:
-                            findings.append(script_finding)
+                        findings.append(port_finding)
 
-                # Process host-level scripts
-                for hostscript in host.findall(".//hostscript"):
-                    for script in hostscript.findall("script"):
-                        script_finding = self._parse_script(
-                            script, host_addr, hostnames, "0", "tcp", ""
-                        )
-                        if script_finding:
-                            findings.append(script_finding)
+                        # Process NSE scripts on this port
+                        for script in port.findall("script"):
+                            script_finding = self._parse_script(
+                                script, host_addr, hostnames, port_id, protocol, service_name
+                            )
+                            if script_finding:
+                                findings.append(script_finding)
+
+                    # Process host-level scripts
+                    for hostscript in host.findall(".//hostscript"):
+                        for script in hostscript.findall("script"):
+                            script_finding = self._parse_script(
+                                script, host_addr, hostnames, "0", "tcp", ""
+                            )
+                            if script_finding:
+                                findings.append(script_finding)
+
+                except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                    logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                    skipped += 1
+                    continue
+
+            if skipped > 0:
+                logger.error(
+                    "Skipped %d of %d items in %s — possible schema change or parser bug",
+                    skipped, total, file_path,
+                )
+
+            if total > 0 and skipped == total:
+                raise ParseError(
+                    f"All {total} items failed to parse — likely schema change or parser bug",
+                    file_path,
+                )
 
         except ET.ParseError as e:
             raise ParseError(f"Invalid XML: {e}", file_path)

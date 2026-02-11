@@ -176,6 +176,7 @@ Options:
   --run-id TEXT              Pipeline run identifier
   --parser-dir PATH          Custom parser plugin directory (repeatable)
   --baseline PATH            Previous results file for incremental correlation
+  --force-parser TEXT        Force a specific parser by tool_name (bypasses auto-detection)
 ```
 
 ### `vinculum stats`

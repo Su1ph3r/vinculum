@@ -60,90 +60,105 @@ class NubicustosContainersParser(BaseParser):
             return []
 
         findings: list[UnifiedFinding] = []
+        skipped = 0
+        total = len(containers)
 
         for container in containers:
-            finding = self._parse_container(container)
-            if finding:
-                findings.append(finding)
+            try:
+                finding = self._parse_container(container)
+                if finding:
+                    findings.append(finding)
+            except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                skipped += 1
+                continue
+
+        if skipped > 0:
+            logger.error(
+                "Skipped %d of %d items in %s — possible schema change or parser bug",
+                skipped, total, file_path,
+            )
+
+        if total > 0 and skipped == total:
+            raise ParseError(
+                f"All {total} items failed to parse — likely schema change or parser bug",
+                file_path,
+            )
 
         logger.info(f"Parsed {len(findings)} containers from {file_path}")
         return findings
 
     def _parse_container(self, container: dict[str, Any]) -> UnifiedFinding | None:
         """Parse a single container entry into a UnifiedFinding."""
-        try:
-            container_id = container.get("id", "")
-            name = container.get("name", "")
-            image = container.get("image", "")
+        container_id = container.get("id", "")
+        name = container.get("name", "")
+        image = container.get("image", "")
 
-            if not name and not image:
-                logger.warning(
-                    f"Skipping container with missing name and image: {container_id}"
-                )
-                return None
-
-            host_ip = container.get("host_ip")
-            node = container.get("node", "")
-            namespace = container.get("namespace", "")
-            runtime = container.get("runtime", "")
-            privileged = container.get("privileged", False)
-            ports = container.get("ports", [])
-            status = container.get("status", "")
-            labels = container.get("labels", {})
-
-            # Use host_ip if available, fall back to node
-            host = host_ip or node
-
-            location = FindingLocation(
-                host=host,
+        if not name and not image:
+            logger.warning(
+                f"Skipping container with missing name and image: {container_id}"
             )
-
-            # Build tags from container metadata
-            tags: list[str] = []
-            if image:
-                tags.append(f"image:{image}")
-            if namespace:
-                tags.append(f"namespace:{namespace}")
-            if runtime:
-                tags.append(f"runtime:{runtime}")
-            if privileged:
-                tags.append("privileged")
-            if status:
-                tags.append(f"status:{status}")
-            if node:
-                tags.append(f"node:{node}")
-
-            # Add port tags
-            for port_entry in ports:
-                container_port = port_entry.get("container_port")
-                port_protocol = port_entry.get("protocol", "TCP")
-                if container_port is not None:
-                    tags.append(f"port:{container_port}/{port_protocol}")
-
-            # Add label tags
-            for key, value in labels.items():
-                tags.append(f"label:{key}={value}")
-
-            title = f"Container inventory: {name} ({image})"
-            description = (
-                f"Container '{name}' running image {image} "
-                f"in namespace {namespace or 'default'} on node {node or 'unknown'}"
-            )
-            if privileged:
-                description += " [PRIVILEGED]"
-
-            return UnifiedFinding(
-                source_tool=self.tool_name,
-                source_id=container_id,
-                title=title,
-                description=description,
-                severity=Severity.INFO,
-                confidence=Confidence.CERTAIN,
-                location=location,
-                finding_type=FindingType.CONTAINER,
-                tags=tags,
-                raw_data=container,
-            )
-        except Exception as e:
-            logger.warning(f"Skipping malformed container: {e}")
             return None
+
+        host_ip = container.get("host_ip")
+        node = container.get("node", "")
+        namespace = container.get("namespace", "")
+        runtime = container.get("runtime", "")
+        privileged = container.get("privileged", False)
+        ports = container.get("ports", [])
+        status = container.get("status", "")
+        labels = container.get("labels", {})
+
+        # Use host_ip if available, fall back to node
+        host = host_ip or node
+
+        location = FindingLocation(
+            host=host,
+        )
+
+        # Build tags from container metadata
+        tags: list[str] = []
+        if image:
+            tags.append(f"image:{image}")
+        if namespace:
+            tags.append(f"namespace:{namespace}")
+        if runtime:
+            tags.append(f"runtime:{runtime}")
+        if privileged:
+            tags.append("privileged")
+        if status:
+            tags.append(f"status:{status}")
+        if node:
+            tags.append(f"node:{node}")
+
+        # Add port tags
+        for port_entry in ports:
+            container_port = port_entry.get("container_port")
+            port_protocol = port_entry.get("protocol", "TCP")
+            if container_port is not None:
+                tags.append(f"port:{container_port}/{port_protocol}")
+
+        # Add label tags
+        for key, value in labels.items():
+            tags.append(f"label:{key}={value}")
+
+        title = f"Container inventory: {name} ({image})"
+        description = (
+            f"Container '{name}' running image {image} "
+            f"in namespace {namespace or 'default'} on node {node or 'unknown'}"
+        )
+        if privileged:
+            description += " [PRIVILEGED]"
+
+        return UnifiedFinding(
+            source_tool=self.tool_name,
+            source_id=container_id,
+            title=title,
+            description=description,
+            severity=Severity.INFO,
+            confidence=Confidence.CERTAIN,
+            location=location,
+            finding_type=FindingType.CONTAINER,
+            tags=tags,
+            raw_data=container,
+        )

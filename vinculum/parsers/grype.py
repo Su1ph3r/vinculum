@@ -53,17 +53,36 @@ class GrypeParser(BaseParser):
             with open(file_path, "r") as f:
                 data = json.load(f)
 
-            for match in data.get("matches", []):
+            matches = data.get("matches", [])
+            skipped = 0
+            total = len(matches)
+
+            for match in matches:
                 try:
                     finding = self._parse_match(match)
                     if finding:
                         findings.append(finding)
-                except Exception as e:
-                    logger.warning("Skipping malformed Grype match: %s", e)
+                except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                    logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                    skipped += 1
                     continue
+
+            if skipped > 0:
+                logger.error(
+                    "Skipped %d of %d items in %s — possible schema change or parser bug",
+                    skipped, total, file_path,
+                )
+
+            if total > 0 and skipped == total:
+                raise ParseError(
+                    f"All {total} items failed to parse — likely schema change or parser bug",
+                    file_path,
+                )
 
         except json.JSONDecodeError as e:
             raise ParseError(f"Invalid JSON: {e}", file_path)
+        except ParseError:
+            raise
         except Exception as e:
             raise ParseError(f"Failed to parse: {e}", file_path)
 
@@ -77,6 +96,7 @@ class GrypeParser(BaseParser):
 
         vuln_id = vulnerability.get("id", "")
         if not vuln_id:
+            logger.warning("Skipping Grype match with empty vulnerability id")
             return None
 
         artifact_name = artifact.get("name", "")
@@ -177,7 +197,11 @@ class GrypeParser(BaseParser):
             "low": Severity.LOW,
             "negligible": Severity.INFO,
         }
-        return mapping.get(severity_str.lower(), Severity.INFO)
+        result = mapping.get(severity_str.lower())
+        if result is None:
+            logger.warning("Unknown severity '%s', defaulting to MEDIUM", severity_str)
+            return Severity.MEDIUM
+        return result
 
     def _determine_finding_type(self, artifact_type: str) -> FindingType:
         """Determine finding type based on artifact type."""

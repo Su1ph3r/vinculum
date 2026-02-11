@@ -64,51 +64,84 @@ class CheckovParser(BaseParser):
                 data = json.load(f)
 
             if isinstance(data, list):
-                findings = self._parse_list_format(data)
+                findings = self._parse_list_format(data, file_path)
             elif isinstance(data, dict):
-                findings = self._parse_dict_format(data)
+                findings = self._parse_dict_format(data, file_path)
 
         except json.JSONDecodeError as e:
             raise ParseError(f"Invalid JSON: {e}", file_path)
+        except ParseError:
+            raise
         except Exception as e:
             raise ParseError(f"Failed to parse: {e}", file_path)
 
         logger.info(f"Parsed {len(findings)} findings from {file_path}")
         return findings
 
-    def _parse_list_format(self, data: list[dict[str, Any]]) -> list[UnifiedFinding]:
+    def _parse_list_format(self, data: list[dict[str, Any]], file_path: Path | None = None) -> list[UnifiedFinding]:
         """Parse Checkov list format (array of check type results)."""
         findings = []
+        skipped = 0
+        total = 0
         for item in data:
             check_type = item.get("check_type", "")
             results = item.get("results", {})
             failed_checks = results.get("failed_checks", [])
+            total += len(failed_checks)
 
             for check in failed_checks:
                 try:
                     finding = self._parse_failed_check(check, check_type)
                     if finding:
                         findings.append(finding)
-                except Exception as e:
-                    logger.warning("Skipping malformed Checkov check: %s", e)
+                except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                    logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                    skipped += 1
                     continue
+
+        if skipped > 0:
+            logger.error(
+                "Skipped %d of %d items in %s — possible schema change or parser bug",
+                skipped, total, file_path,
+            )
+
+        if total > 0 and skipped == total:
+            raise ParseError(
+                f"All {total} items failed to parse — likely schema change or parser bug",
+                file_path,
+            )
 
         return findings
 
-    def _parse_dict_format(self, data: dict[str, Any]) -> list[UnifiedFinding]:
+    def _parse_dict_format(self, data: dict[str, Any], file_path: Path | None = None) -> list[UnifiedFinding]:
         """Parse Checkov dict format (single result with passed/failed)."""
         findings = []
         check_type = data.get("check_type", "")
         failed_checks = data.get("failed", [])
+        skipped = 0
+        total = len(failed_checks)
 
         for check in failed_checks:
             try:
                 finding = self._parse_failed_check(check, check_type)
                 if finding:
                     findings.append(finding)
-            except Exception as e:
-                logger.warning("Skipping malformed Checkov check: %s", e)
+            except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                skipped += 1
                 continue
+
+        if skipped > 0:
+            logger.error(
+                "Skipped %d of %d items in %s — possible schema change or parser bug",
+                skipped, total, file_path,
+            )
+
+        if total > 0 and skipped == total:
+            raise ParseError(
+                f"All {total} items failed to parse — likely schema change or parser bug",
+                file_path,
+            )
 
         return findings
 
@@ -120,6 +153,7 @@ class CheckovParser(BaseParser):
         """Parse a single failed Checkov check."""
         check_id = check.get("check_id", "")
         if not check_id:
+            logger.warning("Skipping Checkov check with empty check_id")
             return None
 
         name = check.get("name", check_id)
@@ -208,7 +242,11 @@ class CheckovParser(BaseParser):
             "info": Severity.INFO,
             "none": Severity.INFO,
         }
-        return mapping.get(severity_str.lower(), Severity.INFO)
+        result = mapping.get(severity_str.lower())
+        if result is None:
+            logger.warning("Unknown severity '%s', defaulting to MEDIUM", severity_str)
+            return Severity.MEDIUM
+        return result
 
     def _determine_finding_type(self, check_type: str) -> FindingType:
         """Determine finding type based on Checkov check_type."""

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--force-parser` CLI flag to bypass auto-detection and force a specific parser by tool_name
+- `ParserRegistry.get_parser_by_name()` classmethod for programmatic parser lookup
+- `AriadneParser` now exported from `vinculum.parsers` module
+
+### Changed
+- Parser error handling hardened across all 10 new parsers:
+  - Failure threshold: raises `ParseError` when 100% of items fail to parse (detects schema changes)
+  - Narrowed exception types from broad `Exception` to `(KeyError, TypeError, ValueError, IndexError, AttributeError)`
+  - Added `except ParseError: raise` guards to prevent error double-wrapping
+  - Tool-specific warning messages for skipped items include parser name
+  - Error-level logging when items are skipped with total/skipped counts
+  - Warnings logged for missing required fields (empty IDs, missing names)
+  - Unknown severity strings now default to MEDIUM (was INFO) with logged warning
+  - MobSF sub-parser methods now include file path context in error messages
+
 ## [0.4.0] - 2026-02-11
 
 ### Added

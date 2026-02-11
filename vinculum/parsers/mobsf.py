@@ -57,31 +57,33 @@ class MobSFParser(BaseParser):
             # Parse code analysis findings
             code_analysis = data.get("code_analysis", {})
             if isinstance(code_analysis, dict):
-                findings.extend(self._parse_code_analysis(code_analysis, app_name, platform))
+                findings.extend(self._parse_code_analysis(code_analysis, app_name, platform, file_path))
 
             # Parse manifest analysis findings
             manifest_analysis = data.get("manifest_analysis", [])
             if isinstance(manifest_analysis, list):
                 findings.extend(
-                    self._parse_manifest_analysis(manifest_analysis, app_name, platform)
+                    self._parse_manifest_analysis(manifest_analysis, app_name, platform, file_path)
                 )
 
             # Parse binary analysis findings
             binary_analysis = data.get("binary_analysis", [])
             if isinstance(binary_analysis, list):
                 findings.extend(
-                    self._parse_binary_analysis(binary_analysis, app_name, platform)
+                    self._parse_binary_analysis(binary_analysis, app_name, platform, file_path)
                 )
 
             # Parse certificate analysis findings
             cert_analysis = data.get("certificate_analysis", {})
             if isinstance(cert_analysis, dict) and cert_analysis.get("certificate_findings"):
                 findings.extend(
-                    self._parse_certificate_analysis(cert_analysis, app_name, platform)
+                    self._parse_certificate_analysis(cert_analysis, app_name, platform, file_path)
                 )
 
         except json.JSONDecodeError as e:
             raise ParseError(f"Invalid JSON: {e}", file_path)
+        except ParseError:
+            raise
         except Exception as e:
             raise ParseError(f"Failed to parse: {e}", file_path)
 
@@ -93,9 +95,12 @@ class MobSFParser(BaseParser):
         code_analysis: dict[str, Any],
         app_name: str,
         platform: str,
+        file_path: Path | None = None,
     ) -> list[UnifiedFinding]:
         """Parse code analysis section (dict of findings by category)."""
         findings = []
+        skipped = 0
+        total = len(code_analysis)
 
         for key, finding_data in code_analysis.items():
             try:
@@ -118,6 +123,11 @@ class MobSFParser(BaseParser):
 
                 # Create a finding for each affected file, or one if no files
                 if file_paths:
+                    if len(file_paths) > 5:
+                        logger.warning(
+                            "Code analysis finding '%s' affects %d files, reporting first 5 only",
+                            key, len(file_paths),
+                        )
                     for fp in file_paths[:5]:  # Limit to avoid explosion
                         finding = UnifiedFinding(
                             source_tool=self.tool_name,
@@ -146,9 +156,22 @@ class MobSFParser(BaseParser):
                     )
                     findings.append(finding)
 
-            except Exception as e:
-                logger.warning("Skipping malformed code analysis finding '%s': %s", key, e)
+            except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                skipped += 1
                 continue
+
+        if skipped > 0:
+            logger.error(
+                "Skipped %d of %d items in code_analysis %s — possible schema change or parser bug",
+                skipped, total, file_path,
+            )
+
+        if total > 0 and skipped == total:
+            raise ParseError(
+                f"All {total} items failed to parse in code_analysis — likely schema change or parser bug",
+                file_path,
+            )
 
         return findings
 
@@ -157,9 +180,12 @@ class MobSFParser(BaseParser):
         manifest_analysis: list[dict[str, Any]],
         app_name: str,
         platform: str,
+        file_path: Path | None = None,
     ) -> list[UnifiedFinding]:
         """Parse manifest analysis section (list of findings)."""
         findings = []
+        skipped = 0
+        total = len(manifest_analysis)
 
         for i, item in enumerate(manifest_analysis):
             try:
@@ -187,9 +213,22 @@ class MobSFParser(BaseParser):
                 )
                 findings.append(finding)
 
-            except Exception as e:
-                logger.warning("Skipping malformed manifest finding at index %d: %s", i, e)
+            except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                skipped += 1
                 continue
+
+        if skipped > 0:
+            logger.error(
+                "Skipped %d of %d items in manifest_analysis %s — possible schema change or parser bug",
+                skipped, total, file_path,
+            )
+
+        if total > 0 and skipped == total:
+            raise ParseError(
+                f"All {total} items failed to parse in manifest_analysis — likely schema change or parser bug",
+                file_path,
+            )
 
         return findings
 
@@ -198,9 +237,12 @@ class MobSFParser(BaseParser):
         binary_analysis: list[dict[str, Any]],
         app_name: str,
         platform: str,
+        file_path: Path | None = None,
     ) -> list[UnifiedFinding]:
         """Parse binary analysis section (list of findings)."""
         findings = []
+        skipped = 0
+        total = len(binary_analysis)
 
         for i, item in enumerate(binary_analysis):
             try:
@@ -228,9 +270,22 @@ class MobSFParser(BaseParser):
                 )
                 findings.append(finding)
 
-            except Exception as e:
-                logger.warning("Skipping malformed binary finding at index %d: %s", i, e)
+            except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                skipped += 1
                 continue
+
+        if skipped > 0:
+            logger.error(
+                "Skipped %d of %d items in binary_analysis %s — possible schema change or parser bug",
+                skipped, total, file_path,
+            )
+
+        if total > 0 and skipped == total:
+            raise ParseError(
+                f"All {total} items failed to parse in binary_analysis — likely schema change or parser bug",
+                file_path,
+            )
 
         return findings
 
@@ -239,10 +294,13 @@ class MobSFParser(BaseParser):
         cert_analysis: dict[str, Any],
         app_name: str,
         platform: str,
+        file_path: Path | None = None,
     ) -> list[UnifiedFinding]:
         """Parse certificate analysis section."""
         findings = []
         cert_findings = cert_analysis.get("certificate_findings", [])
+        skipped = 0
+        total = len(cert_findings)
 
         for i, item in enumerate(cert_findings):
             try:
@@ -276,9 +334,22 @@ class MobSFParser(BaseParser):
                 )
                 findings.append(finding)
 
-            except Exception as e:
-                logger.warning("Skipping malformed certificate finding at index %d: %s", i, e)
+            except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                skipped += 1
                 continue
+
+        if skipped > 0:
+            logger.error(
+                "Skipped %d of %d items in certificate_analysis %s — possible schema change or parser bug",
+                skipped, total, file_path,
+            )
+
+        if total > 0 and skipped == total:
+            raise ParseError(
+                f"All {total} items failed to parse in certificate_analysis — likely schema change or parser bug",
+                file_path,
+            )
 
         return findings
 
@@ -291,7 +362,11 @@ class MobSFParser(BaseParser):
             "secure": Severity.INFO,
             "good": Severity.INFO,
         }
-        return mapping.get(severity_str.lower(), Severity.INFO)
+        result = mapping.get(severity_str.lower())
+        if result is None:
+            logger.warning("Unknown severity '%s', defaulting to MEDIUM", severity_str)
+            return Severity.MEDIUM
+        return result
 
     def _detect_platform(self, data: dict[str, Any]) -> str:
         """Detect the platform from MobSF data."""

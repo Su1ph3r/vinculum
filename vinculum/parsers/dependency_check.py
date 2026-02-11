@@ -70,6 +70,9 @@ class DependencyCheckParser(BaseParser):
             if tag.startswith("{"):
                 ns = tag[: tag.index("}") + 1]
 
+            skipped = 0
+            total = 0
+
             for dependency in root.findall(f".//{ns}dependency"):
                 file_name = self._get_text(dependency, f"{ns}fileName", "")
                 file_path_str = self._get_text(dependency, f"{ns}filePath", "")
@@ -78,20 +81,32 @@ class DependencyCheckParser(BaseParser):
                 if vulns_container is None:
                     continue
 
-                for vuln in vulns_container.findall(f"{ns}vulnerability"):
+                vulns = vulns_container.findall(f"{ns}vulnerability")
+                total += len(vulns)
+
+                for vuln in vulns:
                     try:
                         finding = self._parse_xml_vulnerability(
                             vuln, ns, file_name, file_path_str
                         )
                         if finding:
                             findings.append(finding)
-                    except Exception as e:
-                        logger.warning(
-                            "Skipping malformed vulnerability in %s: %s",
-                            file_name,
-                            e,
-                        )
+                    except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                        logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                        skipped += 1
                         continue
+
+            if skipped > 0:
+                logger.error(
+                    "Skipped %d of %d items in %s — possible schema change or parser bug",
+                    skipped, total, file_path,
+                )
+
+            if total > 0 and skipped == total:
+                raise ParseError(
+                    f"All {total} items failed to parse — likely schema change or parser bug",
+                    file_path,
+                )
 
         except ET.ParseError as e:
             raise ParseError(f"Invalid XML: {e}", file_path)
@@ -113,6 +128,7 @@ class DependencyCheckParser(BaseParser):
         """Parse a single vulnerability element from XML."""
         name = self._get_text(vuln, f"{ns}name", "")
         if not name:
+            logger.warning("Skipping dependency-check XML vulnerability with empty name")
             return None
 
         description = self._get_text(vuln, f"{ns}description", "")
@@ -201,10 +217,14 @@ class DependencyCheckParser(BaseParser):
                 data = json.load(f)
 
             dependencies = data.get("dependencies", [])
+            skipped = 0
+            total = 0
+
             for dep in dependencies:
                 file_name = dep.get("fileName", "")
                 file_path_str = dep.get("filePath", "")
                 vulnerabilities = dep.get("vulnerabilities", [])
+                total += len(vulnerabilities)
 
                 for vuln in vulnerabilities:
                     try:
@@ -213,13 +233,22 @@ class DependencyCheckParser(BaseParser):
                         )
                         if finding:
                             findings.append(finding)
-                    except Exception as e:
-                        logger.warning(
-                            "Skipping malformed vulnerability in %s: %s",
-                            file_name,
-                            e,
-                        )
+                    except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                        logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                        skipped += 1
                         continue
+
+            if skipped > 0:
+                logger.error(
+                    "Skipped %d of %d items in %s — possible schema change or parser bug",
+                    skipped, total, file_path,
+                )
+
+            if total > 0 and skipped == total:
+                raise ParseError(
+                    f"All {total} items failed to parse — likely schema change or parser bug",
+                    file_path,
+                )
 
         except json.JSONDecodeError as e:
             raise ParseError(f"Invalid JSON: {e}", file_path)
@@ -240,6 +269,7 @@ class DependencyCheckParser(BaseParser):
         """Parse a single vulnerability dict from JSON."""
         name = vuln.get("name", "")
         if not name:
+            logger.warning("Skipping dependency-check JSON vulnerability with empty name")
             return None
 
         description = vuln.get("description", "")
@@ -344,5 +374,5 @@ class DependencyCheckParser(BaseParser):
             try:
                 return float(text)
             except ValueError:
-                pass
+                logger.warning("Could not parse float value '%s' from tag '%s'", text, tag)
         return None

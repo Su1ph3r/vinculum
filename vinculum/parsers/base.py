@@ -75,6 +75,14 @@ class ParserRegistry:
             cls._parsers.append(parser)
 
     @classmethod
+    def get_parser_by_name(cls, tool_name: str) -> BaseParser | None:
+        """Find a parser by its tool_name."""
+        for parser in cls._parsers:
+            if parser.tool_name == tool_name:
+                return parser
+        return None
+
+    @classmethod
     def get_parser_for_file(cls, file_path: Path) -> BaseParser | None:
         """Find a parser that can handle the given file."""
         for parser in cls._parsers:

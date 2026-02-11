@@ -71,82 +71,97 @@ class AriadneReportParser(BaseParser):
             return []
 
         findings: list[UnifiedFinding] = []
+        skipped = 0
+        total = len(attack_paths)
 
         for path in attack_paths:
-            finding = self._parse_attack_path(path)
-            if finding:
-                findings.append(finding)
+            try:
+                finding = self._parse_attack_path(path)
+                if finding:
+                    findings.append(finding)
+            except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                skipped += 1
+                continue
+
+        if skipped > 0:
+            logger.error(
+                "Skipped %d of %d items in %s — possible schema change or parser bug",
+                skipped, total, file_path,
+            )
+
+        if total > 0 and skipped == total:
+            raise ParseError(
+                f"All {total} items failed to parse — likely schema change or parser bug",
+                file_path,
+            )
 
         logger.info(f"Parsed {len(findings)} attack paths from {file_path}")
         return findings
 
     def _parse_attack_path(self, path: dict[str, Any]) -> UnifiedFinding | None:
         """Parse a single attack path into a UnifiedFinding."""
-        try:
-            path_id = path.get("id", "")
-            title = path.get("title", "")
-            description = path.get("description", "")
-            nodes = path.get("nodes", [])
+        path_id = path.get("id", "")
+        title = path.get("title", "")
+        description = path.get("description", "")
+        nodes = path.get("nodes", [])
 
-            if not title:
-                logger.warning(f"Skipping attack path with missing title: {path_id}")
-                return None
-
-            # Determine severity from the highest-severity node
-            severity = self._highest_node_severity(nodes)
-
-            # Map confidence
-            confidence = Confidence.from_string(path.get("confidence", "tentative"))
-
-            # Determine finding type from node types
-            finding_type = self._determine_finding_type(nodes)
-
-            # Extract all CVEs and CWEs from nodes
-            cve_ids: list[str] = []
-            cwe_ids: list[str] = []
-            for node in nodes:
-                cve_ids.extend(node.get("cve_ids", []))
-                cwe_ids.extend(node.get("cwe_ids", []))
-            cve_ids = list(set(cve_ids))
-            cwe_ids = list(set(cwe_ids))
-
-            # Build location from the first node with host info
-            location = self._build_location(nodes)
-
-            # Build tags
-            tags: list[str] = []
-            for technique in path.get("mitre_techniques", []):
-                tags.append(f"mitre:technique:{technique}")
-            tags.append(f"path_nodes:{len(nodes)}")
-            tags.append(f"path_edges:{len(path.get('edges', []))}")
-
-            # Add node type tags
-            node_types = set()
-            for node in nodes:
-                node_type = node.get("type", "")
-                if node_type:
-                    node_types.add(node_type)
-            for nt in sorted(node_types):
-                tags.append(f"node_type:{nt}")
-
-            return UnifiedFinding(
-                source_tool=self.tool_name,
-                source_id=path_id,
-                title=title,
-                description=description,
-                severity=severity,
-                confidence=confidence,
-                cve_ids=cve_ids,
-                cwe_ids=cwe_ids,
-                location=location,
-                finding_type=finding_type,
-                evidence=path.get("playbook"),
-                tags=tags,
-                raw_data=path,
-            )
-        except Exception as e:
-            logger.warning(f"Skipping malformed attack path: {e}")
+        if not title:
+            logger.warning(f"Skipping attack path with missing title: {path_id}")
             return None
+
+        # Determine severity from the highest-severity node
+        severity = self._highest_node_severity(nodes)
+
+        # Map confidence
+        confidence = Confidence.from_string(path.get("confidence", "tentative"))
+
+        # Determine finding type from node types
+        finding_type = self._determine_finding_type(nodes)
+
+        # Extract all CVEs and CWEs from nodes
+        cve_ids: list[str] = []
+        cwe_ids: list[str] = []
+        for node in nodes:
+            cve_ids.extend(node.get("cve_ids", []))
+            cwe_ids.extend(node.get("cwe_ids", []))
+        cve_ids = list(set(cve_ids))
+        cwe_ids = list(set(cwe_ids))
+
+        # Build location from the first node with host info
+        location = self._build_location(nodes)
+
+        # Build tags
+        tags: list[str] = []
+        for technique in path.get("mitre_techniques", []):
+            tags.append(f"mitre:technique:{technique}")
+        tags.append(f"path_nodes:{len(nodes)}")
+        tags.append(f"path_edges:{len(path.get('edges', []))}")
+
+        # Add node type tags
+        node_types = set()
+        for node in nodes:
+            node_type = node.get("type", "")
+            if node_type:
+                node_types.add(node_type)
+        for nt in sorted(node_types):
+            tags.append(f"node_type:{nt}")
+
+        return UnifiedFinding(
+            source_tool=self.tool_name,
+            source_id=path_id,
+            title=title,
+            description=description,
+            severity=severity,
+            confidence=confidence,
+            cve_ids=cve_ids,
+            cwe_ids=cwe_ids,
+            location=location,
+            finding_type=finding_type,
+            evidence=path.get("playbook"),
+            tags=tags,
+            raw_data=path,
+        )
 
     def _highest_node_severity(self, nodes: list[dict[str, Any]]) -> Severity:
         """Return the highest severity found across all nodes."""

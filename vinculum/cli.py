@@ -169,6 +169,12 @@ def cli():
     default=None,
     help="Path to previous JSON results for incremental correlation",
 )
+@click.option(
+    "--force-parser",
+    type=str,
+    default=None,
+    help="Force a specific parser by tool_name (bypasses auto-detection)",
+)
 def ingest(
     files,
     config_path,
@@ -185,6 +191,7 @@ def ingest(
     run_id,
     parser_dir,
     baseline,
+    force_parser,
 ):
     """
     Ingest security findings from multiple tool outputs.
@@ -236,9 +243,23 @@ def ingest(
     ) as progress:
         parse_task = progress.add_task("[green]Parsing files...", total=len(file_list))
 
+        # Resolve forced parser once if specified
+        forced_parser = None
+        if force_parser:
+            forced_parser = ParserRegistry.get_parser_by_name(force_parser)
+            if forced_parser is None:
+                console.print(
+                    f"[red]Error: No parser found with tool_name '{force_parser}'[/red]"
+                )
+                sys.exit(1)
+
         for file_path_str in file_list:
             file_path = Path(file_path_str)
-            parser = ParserRegistry.get_parser_for_file(file_path)
+
+            if forced_parser:
+                parser = forced_parser
+            else:
+                parser = ParserRegistry.get_parser_for_file(file_path)
 
             if parser is None:
                 console.print(f"[yellow]Warning: No parser found for {file_path}[/yellow]")

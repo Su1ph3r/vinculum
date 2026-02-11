@@ -60,75 +60,90 @@ class ReticustosEndpointsParser(BaseParser):
             return []
 
         findings: list[UnifiedFinding] = []
+        skipped = 0
+        total = len(endpoints)
 
         for endpoint in endpoints:
-            finding = self._parse_endpoint(endpoint)
-            if finding:
-                findings.append(finding)
+            try:
+                finding = self._parse_endpoint(endpoint)
+                if finding:
+                    findings.append(finding)
+            except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+                logger.warning("Skipping malformed %s item: %s", self.tool_name, e)
+                skipped += 1
+                continue
+
+        if skipped > 0:
+            logger.error(
+                "Skipped %d of %d items in %s — possible schema change or parser bug",
+                skipped, total, file_path,
+            )
+
+        if total > 0 and skipped == total:
+            raise ParseError(
+                f"All {total} items failed to parse — likely schema change or parser bug",
+                file_path,
+            )
 
         logger.info(f"Parsed {len(findings)} endpoints from {file_path}")
         return findings
 
     def _parse_endpoint(self, endpoint: dict[str, Any]) -> UnifiedFinding | None:
         """Parse a single endpoint entry into a UnifiedFinding."""
-        try:
-            endpoint_id = endpoint.get("id", "")
-            url = endpoint.get("url", "")
-            method = endpoint.get("method", "")
-            host = endpoint.get("host", "")
+        endpoint_id = endpoint.get("id", "")
+        url = endpoint.get("url", "")
+        method = endpoint.get("method", "")
+        host = endpoint.get("host", "")
 
-            if not url:
-                logger.warning(f"Skipping endpoint with missing url: {endpoint_id}")
-                return None
-
-            port = endpoint.get("port")
-            protocol = endpoint.get("protocol")
-            content_type = endpoint.get("content_type", "")
-            discovered_by = endpoint.get("discovered_by", "")
-            status_code = endpoint.get("status_code")
-            authenticated = endpoint.get("authenticated", False)
-            parameters = endpoint.get("parameters", [])
-
-            location = FindingLocation(
-                url=url,
-                method=method,
-                host=host,
-                port=port,
-                protocol=protocol,
-            )
-
-            # Build tags from endpoint metadata
-            tags: list[str] = []
-            if discovered_by:
-                tags.append(f"discovered_by:{discovered_by}")
-            if content_type:
-                tags.append(f"content_type:{content_type}")
-            if authenticated:
-                tags.append("authenticated")
-            if parameters:
-                for param in parameters:
-                    tags.append(f"param:{param}")
-            if status_code is not None:
-                tags.append(f"status:{status_code}")
-
-            title = f"Discovered endpoint: {method} {url}"
-            description = (
-                f"Endpoint discovered via {discovered_by or 'unknown'}: "
-                f"{method} {url} (status {status_code})"
-            )
-
-            return UnifiedFinding(
-                source_tool=self.tool_name,
-                source_id=endpoint_id,
-                title=title,
-                description=description,
-                severity=Severity.INFO,
-                confidence=Confidence.CERTAIN,
-                location=location,
-                finding_type=FindingType.DAST,
-                tags=tags,
-                raw_data=endpoint,
-            )
-        except Exception as e:
-            logger.warning(f"Skipping malformed endpoint: {e}")
+        if not url:
+            logger.warning(f"Skipping endpoint with missing url: {endpoint_id}")
             return None
+
+        port = endpoint.get("port")
+        protocol = endpoint.get("protocol")
+        content_type = endpoint.get("content_type", "")
+        discovered_by = endpoint.get("discovered_by", "")
+        status_code = endpoint.get("status_code")
+        authenticated = endpoint.get("authenticated", False)
+        parameters = endpoint.get("parameters", [])
+
+        location = FindingLocation(
+            url=url,
+            method=method,
+            host=host,
+            port=port,
+            protocol=protocol,
+        )
+
+        # Build tags from endpoint metadata
+        tags: list[str] = []
+        if discovered_by:
+            tags.append(f"discovered_by:{discovered_by}")
+        if content_type:
+            tags.append(f"content_type:{content_type}")
+        if authenticated:
+            tags.append("authenticated")
+        if parameters:
+            for param in parameters:
+                tags.append(f"param:{param}")
+        if status_code is not None:
+            tags.append(f"status:{status_code}")
+
+        title = f"Discovered endpoint: {method} {url}"
+        description = (
+            f"Endpoint discovered via {discovered_by or 'unknown'}: "
+            f"{method} {url} (status {status_code})"
+        )
+
+        return UnifiedFinding(
+            source_tool=self.tool_name,
+            source_id=endpoint_id,
+            title=title,
+            description=description,
+            severity=Severity.INFO,
+            confidence=Confidence.CERTAIN,
+            location=location,
+            finding_type=FindingType.DAST,
+            tags=tags,
+            raw_data=endpoint,
+        )
