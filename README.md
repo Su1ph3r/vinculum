@@ -2,7 +2,9 @@
 
 *Latin: "bond, link, chain"*
 
-**Vinculum** is a security finding correlation engine that unifies, deduplicates, and correlates vulnerability findings from multiple security tools.
+Security finding correlation engine. Ingests vulnerability data from 23+ security tools, deduplicates across scanners, and correlates findings to surface what matters.
+
+Sits between your scanners and your analysis tools — normalizes the noise into actionable signal.
 
 ## Features
 
@@ -29,7 +31,7 @@ pip install vinculum
 Or install from source:
 
 ```bash
-git clone https://github.com/yourusername/vinculum.git
+git clone https://github.com/Su1ph3r/vinculum.git
 cd vinculum
 pip install -e .
 ```
