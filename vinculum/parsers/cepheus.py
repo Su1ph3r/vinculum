@@ -11,19 +11,24 @@ from vinculum.parsers.base import BaseParser, ParseError
 
 logger = get_logger("parsers.cepheus")
 
-# Reliability to confidence mapping
-RELIABILITY_CONFIDENCE = {
-    "high": Confidence.CERTAIN,
-    "medium": Confidence.FIRM,
-    "low": Confidence.TENTATIVE,
-}
+
+def _reliability_to_confidence(value: Any) -> Confidence:
+    """Map Cepheus reliability score (float 0.0-1.0) to a Confidence bucket."""
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return Confidence.TENTATIVE
+    if score >= 0.85:
+        return Confidence.CERTAIN
+    if score >= 0.6:
+        return Confidence.FIRM
+    return Confidence.TENTATIVE
 
 
 class CepheusParser(BaseParser):
-    """
-    Parser for Cepheus container escape analysis JSON export format.
+    """Parser for Cepheus container escape analysis JSON export format.
 
-    Cepheus analyzes container environments for escape chains — sequences
+    Cepheus analyzes container environments for escape chains -- sequences
     of techniques that could allow container breakout. It also assesses
     overall container security posture.
     """
@@ -67,26 +72,27 @@ class CepheusParser(BaseParser):
             if "technique" in r and "description" in r
         }
 
-        findings = []
+        findings: list[UnifiedFinding] = []
         emitted_technique_cves: set[str] = set()
 
         for chain in data.get("chains", []):
-            # One finding per escape chain
             chain_finding = self._parse_chain(chain, posture, remediations)
             if chain_finding:
                 findings.append(chain_finding)
 
-            # Standalone findings for techniques with CVEs (deduplicated across chains)
             for step in chain.get("steps", []):
-                technique = step.get("technique", "unknown")
-                for cve in step.get("cves", []):
-                    key = f"{technique}-{cve}"
-                    if key in emitted_technique_cves:
-                        continue
-                    emitted_technique_cves.add(key)
-                    technique_finding = self._parse_technique_cve(step, cve, posture)
-                    if technique_finding:
-                        findings.append(technique_finding)
+                technique = step.get("technique") or {}
+                technique_id = technique.get("id", "unknown")
+                cve = technique.get("cve")
+                if not cve:
+                    continue
+                key = f"{technique_id}-{cve}"
+                if key in emitted_technique_cves:
+                    continue
+                emitted_technique_cves.add(key)
+                technique_finding = self._parse_technique_cve(step, cve, posture)
+                if technique_finding:
+                    findings.append(technique_finding)
 
         logger.info(f"Parsed {len(findings)} findings from {file_path}")
         return findings
@@ -102,53 +108,51 @@ class CepheusParser(BaseParser):
         if not steps:
             return None
 
-        # Build chain title from step names
-        step_names = [s.get("technique", "unknown") for s in steps]
-        title = "Container Escape: " + " → ".join(step_names)
+        techniques = [s.get("technique") or {} for s in steps]
+        step_names = [t.get("name") or t.get("id") or "unknown" for t in techniques]
+        title = "Container Escape: " + " -> ".join(step_names)
 
         severity = Severity.from_string(chain.get("severity", "high"))
         cvss_score = chain.get("composite_score")
 
-        # Collect all CVEs from all steps
-        cve_ids = []
-        for step in steps:
-            cve_ids.extend(step.get("cves", []))
-        cve_ids = list(set(cve_ids))
+        cve_ids: list[str] = []
+        for t in techniques:
+            cve = t.get("cve")
+            if cve:
+                cve_ids.append(cve)
+        cve_ids = list(dict.fromkeys(cve_ids))
 
-        # Build tags from MITRE ATT&CK IDs
-        tags = []
-        for step in steps:
-            for attack_id in step.get("mitre_attack", []):
+        tags: list[str] = []
+        for t in techniques:
+            for attack_id in t.get("mitre_attack", []) or []:
                 tags.append(f"mitre:{attack_id}")
 
-        # Map reliability to confidence (use lowest reliability in chain)
-        reliability_order = {"high": 2, "medium": 1, "low": 0}
-        min_reliability = "high"
-        for step in steps:
-            step_rel = step.get("reliability", "low")
-            if reliability_order.get(step_rel, 0) < reliability_order.get(min_reliability, 2):
-                min_reliability = step_rel
-        confidence = RELIABILITY_CONFIDENCE.get(min_reliability, Confidence.TENTATIVE)
+        # Lowest per-step reliability drives chain confidence.
+        reliabilities = [t.get("reliability", 0.0) for t in techniques]
+        try:
+            min_reliability = min(float(r) for r in reliabilities) if reliabilities else 0.0
+        except (TypeError, ValueError):
+            min_reliability = 0.0
+        confidence = _reliability_to_confidence(min_reliability)
 
-        # Build remediation from matching techniques
-        remediation_parts = []
-        for step_name in step_names:
-            if step_name in remediations:
-                remediation_parts.append(f"- {step_name}: {remediations[step_name]}")
+        # Remediation keyed by technique id (matches data.remediations.technique).
+        remediation_parts: list[str] = []
+        for t in techniques:
+            tid = t.get("id")
+            if tid and tid in remediations:
+                remediation_parts.append(f"- {tid}: {remediations[tid]}")
         remediation = "\n".join(remediation_parts) if remediation_parts else None
 
-        # Build location from container info
-        container = chain.get("container", {})
+        # Container info comes from posture (chain has no container field).
         location = FindingLocation(
-            host=container.get("hostname") or container.get("container_id"),
+            host=posture.get("hostname"),
         )
 
-        # Description from chain
         description = chain.get("description", f"Container escape chain with {len(steps)} steps.")
 
         return UnifiedFinding(
             source_tool="cepheus",
-            source_id=chain.get("chain_id", ""),
+            source_id=chain.get("id", ""),
             title=title,
             description=description,
             severity=severity,
@@ -169,23 +173,25 @@ class CepheusParser(BaseParser):
         posture: dict[str, Any],
     ) -> UnifiedFinding | None:
         """Parse a standalone finding for a technique with a CVE."""
-        technique = step.get("technique", "unknown")
-        title = f"Container Vulnerability: {technique} ({cve})"
+        technique = step.get("technique") or {}
+        technique_id = technique.get("id", "unknown")
+        technique_name = technique.get("name") or technique_id
 
-        severity = Severity.from_string(step.get("severity", "medium"))
-        reliability = step.get("reliability", "low")
-        confidence = RELIABILITY_CONFIDENCE.get(reliability, Confidence.TENTATIVE)
+        title = f"Container Vulnerability: {technique_name} ({cve})"
 
-        tags = [f"mitre:{aid}" for aid in step.get("mitre_attack", [])]
+        severity = Severity.from_string(technique.get("severity", "medium"))
+        confidence = _reliability_to_confidence(technique.get("reliability"))
+        tags = [f"mitre:{aid}" for aid in (technique.get("mitre_attack", []) or [])]
 
         return UnifiedFinding(
             source_tool="cepheus",
-            source_id=f"{technique}-{cve}",
+            source_id=f"{technique_id}-{cve}",
             title=title,
-            description=step.get("description", ""),
+            description=technique.get("description", ""),
             severity=severity,
             confidence=confidence,
             cve_ids=[cve],
+            location=FindingLocation(host=posture.get("hostname")),
             finding_type=FindingType.CONTAINER,
             tags=tags,
             raw_data={"step": step, "posture": posture},
