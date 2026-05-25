@@ -29,13 +29,19 @@ class NubicustosContainersParser(BaseParser):
         return [".json"]
 
     def supports_file(self, file_path: Path) -> bool:
-        """Detect by the 'format': 'nubicustos-containers' key."""
+        """Detect by either 'format': 'nubicustos-containers' (legacy)
+        or 'export_source': 'nubicustos' with a 'containers' field (current
+        Nubicustos /api/exports/containers output)."""
         if file_path.suffix.lower() not in self.supported_extensions:
             return False
         try:
             with open(file_path, "r") as f:
                 data = json.load(f)
-                return data.get("format") == "nubicustos-containers"
+            if data.get("format") == "nubicustos-containers":
+                return True
+            if data.get("export_source") == "nubicustos" and "containers" in data:
+                return True
+            return False
         except Exception:
             return False
 
@@ -49,9 +55,12 @@ class NubicustosContainersParser(BaseParser):
         except Exception as e:
             raise ParseError(f"Failed to read file: {e}", file_path)
 
-        if data.get("format") != "nubicustos-containers":
+        is_legacy = data.get("format") == "nubicustos-containers"
+        is_current = data.get("export_source") == "nubicustos" and "containers" in data
+        if not (is_legacy or is_current):
             raise ParseError(
-                "Not a valid Nubicustos containers export (missing format key)",
+                "Not a valid Nubicustos containers export "
+                "(needs format='nubicustos-containers' or export_source='nubicustos')",
                 file_path,
             )
 

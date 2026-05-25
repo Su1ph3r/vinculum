@@ -29,13 +29,19 @@ class ReticustosEndpointsParser(BaseParser):
         return [".json"]
 
     def supports_file(self, file_path: Path) -> bool:
-        """Detect by the 'format': 'reticustos-endpoints' key."""
+        """Detect by either 'format': 'reticustos-endpoints' (legacy)
+        or 'export_source': 'reticustos' with an 'endpoints' field (current
+        Reticustos /api/exports/endpoints output)."""
         if file_path.suffix.lower() not in self.supported_extensions:
             return False
         try:
             with open(file_path, "r") as f:
                 data = json.load(f)
-                return data.get("format") == "reticustos-endpoints"
+            if data.get("format") == "reticustos-endpoints":
+                return True
+            if data.get("export_source") == "reticustos" and "endpoints" in data:
+                return True
+            return False
         except Exception:
             return False
 
@@ -49,9 +55,12 @@ class ReticustosEndpointsParser(BaseParser):
         except Exception as e:
             raise ParseError(f"Failed to read file: {e}", file_path)
 
-        if data.get("format") != "reticustos-endpoints":
+        is_legacy = data.get("format") == "reticustos-endpoints"
+        is_current = data.get("export_source") == "reticustos" and "endpoints" in data
+        if not (is_legacy or is_current):
             raise ParseError(
-                "Not a valid Reticustos endpoints export (missing format key)",
+                "Not a valid Reticustos endpoints export "
+                "(needs format='reticustos-endpoints' or export_source='reticustos')",
                 file_path,
             )
 
